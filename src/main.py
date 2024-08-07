@@ -14,7 +14,7 @@ def register_handlers(bot):
 def init_bot(bot):
     register_handlers(bot)
     filters.register_filters(bot)
-    bot.enable_saving_states()
+    bot.enable_saving_states('../.state-save/states.pkl')
     bot.set_my_commands(commands.get_commads_list())
 
 

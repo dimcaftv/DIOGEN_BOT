@@ -2,7 +2,8 @@ from telebot import types
 
 commands_list = [
     types.BotCommand('start', 'запуск бота'),
-    types.BotCommand('help', 'показать помощь')
+    types.BotCommand('help', 'показать помощь'),
+    types.BotCommand('menu', 'открыть главное меню')
 ]
 
 

@@ -1,2 +1,5 @@
 .idea
 .env
+.state-save
+docs
+__pycache__/
