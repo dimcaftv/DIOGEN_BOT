@@ -1,30 +1,14 @@
-from telebot.handler_backends import StatesGroup, State
-
-from menu import menu
+from enum import StrEnum
 
 
-class BotPagesStates(StatesGroup):
-    MAIN = State()
-    GROUPLIST = State()
-    GROUP = State()
-    HOMEWORK = State()
+class BotDataKeys(StrEnum):
+    MENU_MSG_ID = 'menu_msg_id'
 
 
-def quick_page_markup(state, markup):
-    return menu.MenuPage(state, [menu.MenuItem(*data) for data in markup])
+class Singleton(type):
+    __instances = {}
 
-
-pages = [
-    quick_page_markup(BotPagesStates.MAIN, [('группы', 'groups', BotPagesStates.GROUPLIST)]),
-    quick_page_markup(BotPagesStates.GROUPLIST, [('группа', 'group', BotPagesStates.GROUP),
-                                                 ('назад', 'back', BotPagesStates.MAIN)]),
-    quick_page_markup(BotPagesStates.GROUP, [('дз', 'hw', BotPagesStates.HOMEWORK),
-                                             ('назад', 'back', BotPagesStates.GROUPLIST)]),
-    quick_page_markup(BotPagesStates.HOMEWORK, [('назад', 'back', BotPagesStates.GROUP)])
-]
-
-main_menu = menu.Menu(pages)
-
-
-def get_message_for_page(page: menu.MenuPage):
-    return {'text': page.get_page_text(), 'reply_markup': page.get_inline_kb()}
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls.__instances:
+            cls.__instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls.__instances[cls]

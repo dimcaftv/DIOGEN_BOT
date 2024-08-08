@@ -1,15 +1,26 @@
-from telebot import State, types, util
+from typing import Optional
+
+from telebot import State, util
+
+from utils import filters, states
 
 
 class MenuItem:
-    def __init__(self, text: str, callback_data: str, transfer_state: State):
+    def __init__(self, text: str, callback_data: str, transfer_state: State,
+                 filter: Optional[filters.MenuItemFilter] = None):
         self.text = text
         self.callback_data = callback_data
         self.transfer_state = transfer_state
+        self.filter = filter
+
+    def check(self, user_id):
+        if self.filter is None:
+            return True
+        return self.filter.check(user_id)
 
 
 class MenuPage:
-    def __init__(self, state: State, items: list[MenuItem] = None):
+    def __init__(self, state: states.AbsAdvancedState, items: list[MenuItem] = None):
         self.state = state
         self.items = {i.callback_data: i for i in items} if items else {}
 
@@ -19,11 +30,17 @@ class MenuPage:
     def get_item_from_data(self, callback_data):
         return self.items[callback_data]
 
-    def get_page_text(self):
-        return str(self.state.name)
+    def get_items_for_user(self, user_id):
+        return [i for i in self.items.values() if i.check(user_id)]
 
-    def get_inline_kb(self):
-        return util.quick_markup({i.text: {'callback_data': i.callback_data} for i in self.items.values()})
+    def get_page_text(self, user_id):
+        return self.state.get_message_text(user_id)
+
+    def get_inline_kb(self, user_id):
+        return util.quick_markup({i.text: {'callback_data': i.callback_data} for i in self.get_items_for_user(user_id)})
+
+    def get_message_kw(self, user_id):
+        return {'text': self.get_page_text(user_id), 'reply_markup': self.get_inline_kb(user_id)}
 
 
 class Menu:

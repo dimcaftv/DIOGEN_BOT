@@ -1,4 +1,12 @@
+import abc
+
 from telebot import TeleBot, custom_filters
+
+
+class MenuItemFilter(abc.ABC):
+    @abc.abstractmethod
+    def check(self, user_id):
+        raise NotImplementedError
 
 
 def register_filters(bot: TeleBot):

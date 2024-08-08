@@ -2,8 +2,9 @@ import os
 
 from telebot import TeleBot
 
-from utils import filters, commands
+from database import database
 from handlers import message_handlers, callback_handlers
+from utils import filters, commands
 
 
 def register_handlers(bot):
@@ -14,7 +15,7 @@ def register_handlers(bot):
 def init_bot(bot):
     register_handlers(bot)
     filters.register_filters(bot)
-    bot.enable_saving_states('../.state-save/states.pkl')
+    database.SimpleBotStateStorage(bot)
     bot.set_my_commands(commands.get_commads_list())
 
 
