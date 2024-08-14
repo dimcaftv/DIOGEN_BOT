@@ -2,9 +2,10 @@ import os
 
 from telebot import TeleBot
 
-from database import database
-from handlers import message_handlers, callback_handlers
-from utils import filters, commands
+import menu.utils
+from app import App
+from handlers import callback_handlers, message_handlers
+from utils import commands, filters
 
 
 def register_handlers(bot):
@@ -15,7 +16,8 @@ def register_handlers(bot):
 def init_bot(bot):
     register_handlers(bot)
     filters.register_filters(bot)
-    database.SimpleBotStateStorage(bot)
+    App.start(bot)
+    menu.utils.set_app_menu()
     bot.set_my_commands(commands.get_commads_list())
 
 

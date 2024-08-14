@@ -1,18 +1,14 @@
-from menu import menu
-from utils.states import BotPagesStates
+from app import App
+from menu import menu, pages
 
-
-def quick_page_markup(state, markup):
-    return menu.MenuPage(state, [menu.MenuItem(*data) for data in markup])
-
-
-pages = [
-    quick_page_markup(BotPagesStates.MAIN, [('группы', 'groups', BotPagesStates.GROUPLIST)]),
-    quick_page_markup(BotPagesStates.GROUPLIST, [('группа', 'group', BotPagesStates.GROUP),
-                                                 ('назад', 'back', BotPagesStates.MAIN)]),
-    quick_page_markup(BotPagesStates.GROUP, [('дз', 'hw', BotPagesStates.HOMEWORK),
-                                             ('назад', 'back', BotPagesStates.GROUPLIST)]),
-    quick_page_markup(BotPagesStates.HOMEWORK, [('назад', 'back', BotPagesStates.GROUP)])
+pages_list = [
+    pages.MainPage,
+    pages.GroupListPage,
+    pages.GroupPage,
+    pages.HomeworkPage
 ]
 
-main_menu = menu.Menu(pages)
+
+def set_app_menu():
+    m = menu.Menu(pages_list)
+    App.get().set_menu(m)
