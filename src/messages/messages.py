@@ -1,6 +1,6 @@
 from utils import commands
 
-start_cmd_text = 'Легендарный бот для обмена дз с одноклассниками'
+start_cmd_text = 'Легендарный бот для обмена дз с одноклассниками (/help)'
 
 
 def get_help_cmd_text():

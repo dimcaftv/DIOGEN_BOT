@@ -4,7 +4,7 @@ from enum import StrEnum
 class BotDataKeys(StrEnum):
     MENU_MSG_ID = 'menu_msg_id'
     GROUPS = 'groups'
-    PAGE_CB_DATA = 'page_cb_data'
+    PAGE_URL = 'page_url'
     ASKER = 'asker'
 
 

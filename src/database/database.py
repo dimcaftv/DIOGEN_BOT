@@ -2,6 +2,8 @@ import dataclasses
 
 from telebot import TeleBot
 
+from app import App
+from menu import pages
 from utils import utils
 
 
@@ -46,8 +48,8 @@ class SimpleBotStateStorage(metaclass=utils.Singleton):
         i = groups[-1].id + 1 if groups else 1
         groups.append(Group(i, name, user_id, [user_id]))
 
-    def get_page_callback_data(self, user_id):
-        return self.get_data(user_id).setdefault(utils.BotDataKeys.PAGE_CB_DATA, '')
+    def get_page_url(self, user_id):
+        return self.get_data(user_id).setdefault(utils.BotDataKeys.PAGE_URL, pages.MainPage.urlpath)
 
     def set_asker(self, user_id, asker):
         self.askers[user_id] = asker
@@ -61,3 +63,7 @@ class SimpleBotStateStorage(metaclass=utils.Singleton):
     def __del__(self):
         self.bot.current_states.update_data()
         print('saved')
+
+
+def set_app_db(bot: TeleBot):
+    App.get().set_db(SimpleBotStateStorage(bot))

@@ -2,7 +2,6 @@ from typing import Self
 
 from telebot import TeleBot, types
 
-from database import database
 from utils.utils import Singleton
 
 
@@ -18,12 +17,15 @@ class App(metaclass=Singleton):
     def __init__(self, bot: TeleBot):
         self.bot = bot
         self.menu = None
-        self.db = database.SimpleBotStateStorage(bot)
+        self.db = None
 
     def set_menu(self, menu):
         self.menu = menu
 
+    def set_db(self, db):
+        self.db = db
+
     def process_query(self, query: types.CallbackQuery):
         data, user_id = query.data, query.from_user.id
-        action = self.menu.get_action(data, user_id)
+        action = self.menu.get_action(user_id, data)
         action.do(query)

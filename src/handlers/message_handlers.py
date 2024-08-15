@@ -18,15 +18,15 @@ def help_cmd_handler(message: types.Message, bot: TeleBot):
 
 
 def menu_cmd_handler(message: types.Message, bot: TeleBot):
-    bot.set_state(message.from_user.id, states.BotPagesStates.MAIN)
     menu_id = App.get().db.get_menu_id(message.from_user.id)
     if menu_id:
-        bot.delete_message(message.chat.id, menu_id)
-    ans = bot.send_message(message.chat.id,
-                           **App.get().menu.get_page_from_state(states.BotPagesStates.MAIN, '',
-                                                                message.from_user.id).get_message_kw())
-    bot.add_data(message.from_user.id, **{utils.BotDataKeys.MENU_MSG_ID: ans.id})
+        bot.delete_messages(message.chat.id, list(range(menu_id, message.id)))
     bot.delete_message(message.chat.id, message.id)
+
+    ans = bot.send_message(message.chat.id, 'Загрузка...')
+    bot.add_data(message.from_user.id, **{utils.BotDataKeys.MENU_MSG_ID: ans.id})
+
+    App.get().menu.go_to_url(message.from_user.id, 'main')
 
 
 def ask_data_handler(message: types.Message, bot: TeleBot):
