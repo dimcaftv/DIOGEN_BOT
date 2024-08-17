@@ -3,7 +3,6 @@ import typing
 from telebot import TeleBot, types
 
 from app import App
-from menu import actions
 from messages import messages
 from utils import states, utils
 
@@ -30,13 +29,15 @@ def menu_cmd_handler(message: types.Message, bot: TeleBot):
 
 
 def ask_data_handler(message: types.Message, bot: TeleBot):
-    asker: actions.AskAction = App.get().db.get_asker(message.from_user.id)
-    bot.send_message(message.chat.id, asker.wrong_text)
+    menu = App.get().menu
+    asker_url = App.get().db.get_data(message.from_user.id)[utils.BotDataKeys.ASKER_URL]
+    menu.get_action(asker_url).wrong_data_handler(message)
 
 
 def ask_data_success_handler(message: types.Message, bot: TeleBot):
-    asker: actions.AskAction = App.get().db.get_asker(message.from_user.id)
-    asker.set_answer_data(message)
+    menu = App.get().menu
+    asker_url = App.get().db.get_data(message.from_user.id)[utils.BotDataKeys.ASKER_URL]
+    menu.get_action(asker_url).correct_data_handler(message)
 
 
 cmd_handlers: typing.List[typing.Tuple[typing.Callable, typing.LiteralString]] = [

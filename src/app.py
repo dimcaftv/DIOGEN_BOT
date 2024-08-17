@@ -27,5 +27,5 @@ class App(metaclass=Singleton):
 
     def process_query(self, query: types.CallbackQuery):
         data, user_id = query.data, query.from_user.id
-        action = self.menu.get_action(user_id, data)
+        action = self.menu.get_action(data)
         action.do(query)

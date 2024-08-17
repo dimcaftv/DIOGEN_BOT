@@ -19,8 +19,7 @@ class SimpleBotStateStorage(metaclass=utils.Singleton):
     def __init__(self, bot: TeleBot):
         self.bot = bot
         self.bot.enable_saving_states('../.state-save/states.pkl')
-        self.get_raw_data().setdefault(utils.BotDataKeys.GROUPS, [])
-        self.askers = {}
+        self.get_raw_data().setdefault(utils.BotDataKeys.GROUPS, {})
 
     def set_default_state(self, user_id, chat_id=None):
         self.bot.set_state(user_id, None, chat_id)
@@ -36,26 +35,27 @@ class SimpleBotStateStorage(metaclass=utils.Singleton):
     def get_raw_data(self):
         return self.bot.current_states.data
 
-    def get_user_groups(self, user_id):
+    def get_user_groups(self, user_id) -> list[Group]:
         groups: list[Group] = []
-        for g in self.get_raw_data()[utils.BotDataKeys.GROUPS]:
+        for g in self.get_raw_data()[utils.BotDataKeys.GROUPS].values():
             if user_id in g.users:
                 groups.append(g)
         return groups
 
+    def get_group(self, group_id):
+        return self.get_raw_data()[utils.BotDataKeys.GROUPS][group_id]
+
     def create_group(self, user_id, name):
         groups = self.get_raw_data()[utils.BotDataKeys.GROUPS]
-        i = groups[-1].id + 1 if groups else 1
-        groups.append(Group(i, name, user_id, [user_id]))
+        i = groups[sorted(groups.keys())[-1]].id + 1 if groups else 1
+        groups[i] = Group(i, name, user_id, [user_id])
+
+    def delete_group(self, user_id, rel_group_id):
+        groups = self.get_user_groups(user_id)
+        del self.get_raw_data()[utils.BotDataKeys.GROUPS][groups[rel_group_id - 1].id]
 
     def get_page_url(self, user_id):
         return self.get_data(user_id).setdefault(utils.BotDataKeys.PAGE_URL, pages.MainPage.urlpath)
-
-    def set_asker(self, user_id, asker):
-        self.askers[user_id] = asker
-
-    def get_asker(self, user_id):
-        return self.askers.get(user_id)
 
     def get_menu_id(self, user_id):
         return self.get_data(user_id).get(utils.BotDataKeys.MENU_MSG_ID)

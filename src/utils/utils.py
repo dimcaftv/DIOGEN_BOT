@@ -5,7 +5,7 @@ class BotDataKeys(StrEnum):
     MENU_MSG_ID = 'menu_msg_id'
     GROUPS = 'groups'
     PAGE_URL = 'page_url'
-    ASKER = 'asker'
+    ASKER_URL = 'asker'
 
 
 class Singleton(type):

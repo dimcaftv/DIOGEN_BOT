@@ -10,7 +10,7 @@ from utils import filters, states
 
 
 class MenuItem:
-    def __init__(self, text: str, action,
+    def __init__(self, text: str, action: actions.Action,
                  filter: Optional[filters.MenuItemFilter] = None):
         self.text = text
         self.action = action
@@ -27,10 +27,10 @@ class AbsMenuPage(abc.ABC):
     urlpath: str = None
 
     def __init__(self, user_id: int, query: str, data: dict = None):
-        self.user_id = user_id
+        self.user = App.get().bot.get_chat_member(user_id, user_id).user
         self.query_data = self.extract_data(query)
         self.data = data if data else {}
-        self.items = {f'button_{i}': v for i, v in enumerate(self.get_items())}
+        self.items = {v.action.get_url_id(): v for v in self.get_items()}
 
     def extract_data(self, query: str):
         res = {}
@@ -64,22 +64,25 @@ class AbsMenuPage(abc.ABC):
 
 
 class Menu:
-    def __init__(self, pages: list[type(AbsMenuPage)] = None):
+    def __init__(self, pages: list[type(AbsMenuPage)] = None,
+                 actions: list[type(actions.Action)] = None):
         self.pages = {p.urlpath: p for p in pages} if pages else {}
+        self.actions = {a.key: a for a in actions} if actions else {}
 
     def update_to_page(self, page: AbsMenuPage):
         app = App.get()
-        menu_id = app.db.get_menu_id(page.user_id)
-        app.bot.set_state(page.user_id, page.state)
-        app.bot.edit_message_text(chat_id=page.user_id,
+        menu_id = app.db.get_menu_id(page.user.id)
+        app.bot.set_state(page.user.id, page.state)
+        app.bot.edit_message_text(chat_id=page.user.id,
                                   message_id=menu_id,
                                   **page.get_message_kw())
 
-    def get_from_page(self, user_id):
-        return self.get_page(user_id, App.get().db.get_page_url(user_id))
-
-    def get_action(self, user_id: int, callback_data: str) -> actions.Action:
-        return self.get_from_page(user_id).get_action(callback_data)
+    def get_action(self, callback_data: str) -> actions.Action:
+        part = callback_data.partition(':')
+        action = self.actions[part[0]]
+        if action.take_params:
+            return action(full_data=part[2])
+        return action()
 
     def get_page(self, user_id: int, url: str, data: dict = None):
         parse = urlparse(url)

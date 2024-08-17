@@ -3,6 +3,7 @@ import abc
 from telebot import TeleBot, custom_filters, types
 
 from app import App
+from utils import utils
 
 
 class MenuItemFilter(abc.ABC):
@@ -15,7 +16,9 @@ class AskerFilter(custom_filters.SimpleCustomFilter):
     key = 'pass_asker'
 
     def check(self, message: types.Message):
-        return App.get().db.get_asker(message.from_user.id).check(message)
+        menu = App.get().menu
+        asker_url = App.get().db.get_data(message.from_user.id)[utils.BotDataKeys.ASKER_URL]
+        return menu.get_action(asker_url).check(message)
 
 
 def register_filters(bot: TeleBot):
