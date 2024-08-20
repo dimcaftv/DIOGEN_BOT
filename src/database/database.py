@@ -4,7 +4,7 @@ from telebot import TeleBot
 
 from app import App
 from menu import pages
-from utils import utils
+from utils import singleton, utils
 
 
 @dataclasses.dataclass
@@ -15,11 +15,12 @@ class Group:
     users: list[int] = dataclasses.field(default_factory=list)
 
 
-class SimpleBotStateStorage(metaclass=utils.Singleton):
+class SimpleBotStateStorage(metaclass=singleton.Singleton):
     def __init__(self, bot: TeleBot):
         self.bot = bot
         self.bot.enable_saving_states('../.state-save/states.pkl')
         self.get_raw_data().setdefault(utils.BotDataKeys.GROUPS, {})
+        self.get_raw_data().setdefault(utils.BotDataKeys.INVITE_LINKS, {})
 
     def set_default_state(self, user_id, chat_id=None):
         self.bot.set_state(user_id, None, chat_id)
@@ -42,7 +43,7 @@ class SimpleBotStateStorage(metaclass=utils.Singleton):
                 groups.append(g)
         return groups
 
-    def get_group(self, group_id):
+    def get_group(self, group_id) -> Group:
         return self.get_raw_data()[utils.BotDataKeys.GROUPS][group_id]
 
     def create_group(self, user_id, name):
@@ -50,9 +51,8 @@ class SimpleBotStateStorage(metaclass=utils.Singleton):
         i = groups[sorted(groups.keys())[-1]].id + 1 if groups else 1
         groups[i] = Group(i, name, user_id, [user_id])
 
-    def delete_group(self, user_id, rel_group_id):
-        groups = self.get_user_groups(user_id)
-        del self.get_raw_data()[utils.BotDataKeys.GROUPS][groups[rel_group_id - 1].id]
+    def delete_group(self, group_id):
+        del self.get_raw_data()[utils.BotDataKeys.GROUPS][group_id]
 
     def get_page_url(self, user_id):
         return self.get_data(user_id).setdefault(utils.BotDataKeys.PAGE_URL, pages.MainPage.urlpath)

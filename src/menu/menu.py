@@ -6,7 +6,7 @@ from telebot import util
 
 from app import App
 from menu import actions
-from utils import filters, states
+from utils import filters, states, utils
 
 
 class MenuItem:
@@ -27,10 +27,10 @@ class AbsMenuPage(abc.ABC):
     urlpath: str = None
 
     def __init__(self, user_id: int, query: str, data: dict = None):
-        self.user = App.get().bot.get_chat_member(user_id, user_id).user
+        self.user = utils.get_user_from_id(user_id)
         self.query_data = self.extract_data(query)
         self.data = data if data else {}
-        self.items = {v.action.get_url_id(): v for v in self.get_items()}
+        self.items = {v.action.get_url(): v for v in self.get_items()}
 
     def extract_data(self, query: str):
         res = {}
@@ -65,9 +65,9 @@ class AbsMenuPage(abc.ABC):
 
 class Menu:
     def __init__(self, pages: list[type(AbsMenuPage)] = None,
-                 actions: list[type(actions.Action)] = None):
+                 actions_list: list[type(actions.Action)] = None):
         self.pages = {p.urlpath: p for p in pages} if pages else {}
-        self.actions = {a.key: a for a in actions} if actions else {}
+        self.actions = {a.key: a for a in actions_list} if actions_list else {}
 
     def update_to_page(self, page: AbsMenuPage):
         app = App.get()
@@ -80,7 +80,7 @@ class Menu:
     def get_action(self, callback_data: str) -> actions.Action:
         part = callback_data.partition(':')
         action = self.actions[part[0]]
-        if action.take_params:
+        if action.take_params and part[2]:
             return action(full_data=part[2])
         return action()
 

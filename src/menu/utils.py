@@ -5,13 +5,17 @@ pages_list = [
     pages.MainPage,
     pages.GroupListPage,
     pages.GroupPage,
-    pages.HomeworkPage
+    pages.HomeworkPage,
+    pages.UsersListPage,
+    pages.ActiveInvitesPage
 ]
 
 actions_list = [
     actions.TransferAction,
-    actions.AddGroupAction,
-    actions.DeleteGroupAction
+    actions.CreateGroupAction,
+    actions.DeleteGroupAction,
+    actions.CreateInviteAction,
+    actions.JoinGroupAction
 ]
 
 

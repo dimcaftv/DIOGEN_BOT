@@ -11,6 +11,8 @@ class BotPagesStates(StatesGroup):
     GROUPLIST = State()
     GROUP = State()
     HOMEWORK = State()
+    USERSLIST = State()
+    ACTIVE_INVITES = State()
 
 
 class ActionStates(StatesGroup):

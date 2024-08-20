@@ -2,7 +2,7 @@ from typing import Self
 
 from telebot import TeleBot, types
 
-from utils.utils import Singleton
+from utils.singleton import Singleton
 
 
 class App(metaclass=Singleton):
