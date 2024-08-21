@@ -1,10 +1,10 @@
 import abc
 from urllib.parse import urlencode
-from uuid import uuid4
 
 from telebot import types
 
 from app import App
+from database.database import GroupInvite
 from utils import states, utils
 
 
@@ -147,13 +147,7 @@ class CreateInviteAction(AskAction):
         return int(message.text)
 
     def process_data(self, user_id, n):
-        app = App.get()
-        links = app.db.get_raw_data()[utils.BotDataKeys.INVITE_LINKS]
-
-        while (l := uuid4().hex[:6]) in links:
-            continue
-
-        links[l] = (self.group_id, n)
+        GroupInvite.generate_invite(self.group_id, n)
 
         self.go_to_prev_page(user_id)
 
@@ -169,22 +163,58 @@ class JoinGroupAction(AskAction):
 
     def check(self, message: types.Message) -> bool:
         links = App.get().db.get_raw_data()[utils.BotDataKeys.INVITE_LINKS]
-        return message.text in links and links[message.text][1] > 0
+        l = message.text.lower()
+        return l in links and links[l].remain_uses > 0
+
+    def extract_data(self, message: types.Message):
+        return message.text.lower()
+
+    def process_data(self, user_id, data):
+        app = App.get()
+        invites = App.get().db.get_raw_data()[utils.BotDataKeys.INVITE_LINKS]
+
+        link = invites[data]
+        group = app.db.get_group(link.group_id)
+
+        if user_id not in group.users:
+            invites[data].remain_uses -= 1
+            if invites[data].remain_uses == 0:
+                del invites[data]
+            group.users.append(user_id)
+
+        app.menu.go_to_url(user_id, f'group?group={group.id}')
+
+
+class KickUserAction(AskAction):
+    key = 'kick_user'
+    take_params = True
+
+    def __init__(self, full_data):
+        super().__init__(
+                'Введи ник участника',
+                'Бро, введи нормальный ник'
+        )
+        self.group_id = int(full_data)
+
+    def get_url_params(self):
+        return str(self.group_id)
 
     def extract_data(self, message: types.Message):
         return message.text
 
+    def check(self, message: types.Message) -> bool:
+        users = App.get().db.get_group(self.group_id).users
+        return (message.text != message.from_user.first_name and
+                message.text in [utils.get_user_from_id(u).first_name for u in users])
+
     def process_data(self, user_id, data):
-        app = App.get()
-        links = App.get().db.get_raw_data()[utils.BotDataKeys.INVITE_LINKS]
+        group = App.get().db.get_group(self.group_id)
 
-        link = links[data]
-        group = app.db.get_group(link[0])
+        u = 0
+        for u in group.users:
+            if utils.get_user_from_id(u).first_name == data:
+                break
 
-        if user_id not in group.users:
-            links[data] = (group.id, link[1] - 1)
-            if links[data][1] == 0:
-                del links[data]
-            group.users.append(user_id)
+        group.users.remove(u)
 
-        app.menu.go_to_url(user_id, f'group?group={group.id}')
+        self.go_to_prev_page(user_id)

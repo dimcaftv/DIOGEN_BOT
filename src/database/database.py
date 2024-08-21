@@ -1,9 +1,9 @@
 import dataclasses
+from uuid import uuid4
 
 from telebot import TeleBot
 
 from app import App
-from menu import pages
 from utils import singleton, utils
 
 
@@ -13,6 +13,27 @@ class Group:
     name: str
     admin: int
     users: list[int] = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass
+class GroupInvite:
+    id: str
+    group_id: int
+    remain_uses: int
+
+    @classmethod
+    def generate_invite(cls, group_id, remain):
+        invites = App.get().db.get_raw_data()[utils.BotDataKeys.INVITE_LINKS]
+        i = cls(cls.generate_id(), group_id, remain)
+        invites[i.id] = i
+
+    @staticmethod
+    def generate_id():
+        invites = App.get().db.get_raw_data()[utils.BotDataKeys.INVITE_LINKS]
+
+        while (l := uuid4().hex[:6]) in invites:
+            continue
+        return l
 
 
 class SimpleBotStateStorage(metaclass=singleton.Singleton):
@@ -55,7 +76,7 @@ class SimpleBotStateStorage(metaclass=singleton.Singleton):
         del self.get_raw_data()[utils.BotDataKeys.GROUPS][group_id]
 
     def get_page_url(self, user_id):
-        return self.get_data(user_id).setdefault(utils.BotDataKeys.PAGE_URL, pages.MainPage.urlpath)
+        return self.get_data(user_id).setdefault(utils.BotDataKeys.PAGE_URL, 'main')
 
     def get_menu_id(self, user_id):
         return self.get_data(user_id).get(utils.BotDataKeys.MENU_MSG_ID)

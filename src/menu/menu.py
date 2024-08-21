@@ -1,25 +1,17 @@
 import abc
-from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
 from telebot import util
 
 from app import App
 from menu import actions
-from utils import filters, states, utils
+from utils import states, utils
 
 
 class MenuItem:
-    def __init__(self, text: str, action: actions.Action,
-                 filter: Optional[filters.MenuItemFilter] = None):
+    def __init__(self, text: str, action: actions.Action):
         self.text = text
         self.action = action
-        self.filter = filter
-
-    def check(self, user_id):
-        if self.filter is None:
-            return True
-        return self.filter.check(user_id)
 
 
 class AbsMenuPage(abc.ABC):

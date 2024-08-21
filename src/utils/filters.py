@@ -1,15 +1,11 @@
-import abc
-
 from telebot import TeleBot, custom_filters, types
 
 from app import App
 from utils import utils
 
 
-class MenuItemFilter(abc.ABC):
-    @abc.abstractmethod
-    def check(self, user_id):
-        raise NotImplementedError
+def is_group_admin(user_id: int, group_id: int):
+    return App.get().db.get_group(group_id).admin == user_id
 
 
 class AskerFilter(custom_filters.SimpleCustomFilter):

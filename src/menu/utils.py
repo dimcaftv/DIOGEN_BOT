@@ -15,7 +15,8 @@ actions_list = [
     actions.CreateGroupAction,
     actions.DeleteGroupAction,
     actions.CreateInviteAction,
-    actions.JoinGroupAction
+    actions.JoinGroupAction,
+    actions.KickUserAction
 ]
 
 

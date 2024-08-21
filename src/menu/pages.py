@@ -1,7 +1,8 @@
 from app import App
-from menu.actions import CreateGroupAction, CreateInviteAction, DeleteGroupAction, JoinGroupAction, TransferAction
+from menu.actions import (CreateGroupAction, CreateInviteAction, DeleteGroupAction, JoinGroupAction, KickUserAction,
+                          TransferAction)
 from menu.menu import AbsMenuPage, MenuItem
-from utils import states, utils
+from utils import filters, states, utils
 
 
 class MainPage(AbsMenuPage):
@@ -46,15 +47,19 @@ class GroupPage(AbsMenuPage):
 
     def get_items(self) -> list[MenuItem]:
         self.group = App.get().db.get_group(self.query_data['group'])
+        is_admin = filters.is_group_admin(self.user.id, self.group.id)
+        items = ([
+                     MenuItem('дз', TransferAction('homework', {'group': self.group.id})),
+                     MenuItem('участники', TransferAction('users_list', {'group': self.group.id}))
+                 ] + [
+                     MenuItem('создать приглашение', CreateInviteAction(self.group.id)),
+                     MenuItem('Активные приглашения', TransferAction('active_invites', {'group': self.group.id})),
+                     MenuItem('удалить', DeleteGroupAction(self.group.id))
+                 ] * is_admin + [
+                     MenuItem('назад', TransferAction('grouplist'))
+                 ])
 
-        return [
-            MenuItem('дз', TransferAction('homework', {'group': self.group.id})),
-            MenuItem('участники', TransferAction('users_list', {'group': self.group.id})),
-            MenuItem('создать приглашение', CreateInviteAction(self.group.id)),
-            MenuItem('Активные приглашения', TransferAction('active_invites', {'group': self.group.id})),
-            MenuItem('удалить', DeleteGroupAction(self.group.id)),
-            MenuItem('назад', TransferAction('grouplist'))
-        ]
+        return items
 
     def get_page_text(self) -> str:
         return (f'Hey {self.user.first_name}, this is {self.group.name} group PAGE\nusers: ' +
@@ -79,7 +84,10 @@ class UsersListPage(AbsMenuPage):
 
     def get_items(self) -> list[MenuItem]:
         self.group = App.get().db.get_group(self.query_data['group'])
-        return [MenuItem('назад', TransferAction('group', {'group': self.group.id}))]
+        is_admin = filters.is_group_admin(self.user.id, self.group.id)
+        items = ([MenuItem('кикнуть', KickUserAction(self.group.id))] * is_admin +
+                 [MenuItem('назад', TransferAction('group', {'group': self.group.id}))])
+        return items
 
     def get_page_text(self) -> str:
         return (f'Hey {self.user.first_name}, this is {self.group.name} userlist PAGE\nusers: ' +
@@ -95,6 +103,7 @@ class ActiveInvitesPage(AbsMenuPage):
         return [MenuItem('назад', TransferAction('group', {'group': self.group.id}))]
 
     def get_page_text(self) -> str:
-        return (f'Hey {self.user.first_name}, this is {self.group.name} userlist PAGE\ninvites: ' +
-                '\n'.join(k for k, v in App.get().db.get_raw_data()[utils.BotDataKeys.INVITE_LINKS].items() if
-                          v[0] == self.group.id))
+        return (f'Hey {self.user.first_name}, this is {self.group.name} invites PAGE\ninvites: ' +
+                '\n'.join(f'{i.id} - Осталось использований: {i.remain_uses}'
+                          for i in App.get().db.get_raw_data()[utils.BotDataKeys.INVITE_LINKS].values()
+                          if i.group_id == self.group.id))
