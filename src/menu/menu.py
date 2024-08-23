@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlparse
 from telebot import util
 
 from app import App
+from database import models
 from menu import actions
 from utils import states, utils
 
@@ -19,7 +20,8 @@ class AbsMenuPage(abc.ABC):
     urlpath: str = None
 
     def __init__(self, user_id: int, query: str, data: dict = None):
-        self.user = utils.get_user_from_id(user_id)
+        self.user = models.UserModel.get(user_id)
+        self.tg_user = utils.get_tg_user_from_model(self.user)
         self.query_data = self.extract_data(query)
         self.data = data if data else {}
         self.items = {v.action.get_url(): v for v in self.get_items()}
@@ -56,14 +58,14 @@ class AbsMenuPage(abc.ABC):
 
 
 class Menu:
-    def __init__(self, pages: list[type(AbsMenuPage)] = None,
-                 actions_list: list[type(actions.Action)] = None):
+    def __init__(self, pages: list[type[AbsMenuPage]] = None,
+                 actions_list: list[type[actions.Action]] = None):
         self.pages = {p.urlpath: p for p in pages} if pages else {}
         self.actions = {a.key: a for a in actions_list} if actions_list else {}
 
     def update_to_page(self, page: AbsMenuPage):
         app = App.get()
-        menu_id = app.db.get_menu_id(page.user.id)
+        menu_id = page.user.menu_msg_id
         app.bot.set_state(page.user.id, page.state)
         app.bot.edit_message_text(chat_id=page.user.id,
                                   message_id=menu_id,

@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 from telebot import types
 
 from app import App
-from database.database import GroupInvite
+from database import models
 from utils import states, utils
 
 
@@ -39,7 +39,9 @@ class TransferAction(Action):
     def do(self, query: types.CallbackQuery):
         app = App.get()
         app.menu.go_to_url(query.from_user.id, self.url)
-        app.db.add_data(query.from_user.id, **{utils.BotDataKeys.PAGE_URL: self.get_url()})
+        u = models.UserModel.get(query.from_user.id)
+        u.page_url = self.get_url()
+        u.save()
 
 
 class DeleteGroupAction(Action):
@@ -51,7 +53,7 @@ class DeleteGroupAction(Action):
 
     def do(self, query: types.CallbackQuery):
         app = App.get()
-        app.db.delete_group(self.group_id)
+        models.GroupModel.get(self.group_id).delete()
         app.menu.go_to_url(query.from_user.id, 'grouplist')
 
     def get_url_params(self):
@@ -76,16 +78,19 @@ class AskAction(Action):
         app = App.get()
         app.bot.send_message(query.message.chat.id, self.ask_text)
         app.bot.set_state(query.from_user.id, states.ActionStates.ASK)
-        app.db.add_data(query.from_user.id, **{utils.BotDataKeys.ASKER_URL: self.get_url()})
+
+        u = models.UserModel.get(query.from_user.id)
+        u.asker_url = self.get_url()
+        u.save()
 
     def clear_ask_messages(self, user_id, up_to_msg_id):
         app = App.get()
-        menu_id = app.db.get_menu_id(user_id)
+        menu_id = models.UserModel.get(user_id).menu_msg_id
         app.bot.delete_messages(user_id, list(range(menu_id + 1, up_to_msg_id + 1)))
 
     def go_to_prev_page(self, user_id):
         app = App.get()
-        url = app.db.get_page_url(user_id)
+        url = models.UserModel.get(user_id).page_url
         app.menu.go_to_url(user_id, url)
 
     @abc.abstractmethod
@@ -100,7 +105,10 @@ class AskAction(Action):
         user_id = message.from_user.id
         self.clear_ask_messages(user_id, message.id)
 
-        del app.db.get_data(message.from_user.id)[utils.BotDataKeys.ASKER_URL]
+        u = models.UserModel.get(message.from_user.id)
+        u.asker_url = None
+        u.save()
+
         self.process_data(message.from_user.id, self.extract_data(message))
 
 
@@ -120,7 +128,9 @@ class CreateGroupAction(AskAction):
         return message.text
 
     def process_data(self, user_id, data):
-        App.get().db.create_group(user_id, data)
+        u = models.UserModel.get(user_id)
+        models.GroupModel(name=data, admin=u, members=[u]).save()
+
         self.go_to_prev_page(user_id)
 
 
@@ -147,7 +157,7 @@ class CreateInviteAction(AskAction):
         return int(message.text)
 
     def process_data(self, user_id, n):
-        GroupInvite.generate_invite(self.group_id, n)
+        models.GroupInviteModel(link=utils.generate_invite_link(), group_id=self.group_id, remain_uses=n).save()
 
         self.go_to_prev_page(user_id)
 
@@ -162,25 +172,23 @@ class JoinGroupAction(AskAction):
         )
 
     def check(self, message: types.Message) -> bool:
-        links = App.get().db.get_raw_data()[utils.BotDataKeys.INVITE_LINKS]
         l = message.text.lower()
-        return l in links and links[l].remain_uses > 0
+        invite = models.GroupInviteModel.get(l)
+        return bool(invite) and invite.remain_uses > 0
 
     def extract_data(self, message: types.Message):
         return message.text.lower()
 
     def process_data(self, user_id, data):
         app = App.get()
-        invites = App.get().db.get_raw_data()[utils.BotDataKeys.INVITE_LINKS]
-
-        link = invites[data]
-        group = app.db.get_group(link.group_id)
-
-        if user_id not in group.users:
-            invites[data].remain_uses -= 1
-            if invites[data].remain_uses == 0:
-                del invites[data]
-            group.users.append(user_id)
+        invite = models.GroupInviteModel.get(data)
+        group = invite.group
+        user = models.UserModel.get(user_id)
+        if user not in group.members:
+            invite.remain_uses -= 1
+            if invite.remain_uses == 0:
+                invite.delete()
+            group.members.append(user)
 
         app.menu.go_to_url(user_id, f'group?group={group.id}')
 
@@ -203,18 +211,18 @@ class KickUserAction(AskAction):
         return message.text
 
     def check(self, message: types.Message) -> bool:
-        users = App.get().db.get_group(self.group_id).users
+        users = models.GroupModel.get(self.group_id).members
         return (message.text != message.from_user.first_name and
-                message.text in [utils.get_user_from_id(u).first_name for u in users])
+                message.text in [utils.get_tg_user_from_model(u).first_name for u in users])
 
     def process_data(self, user_id, data):
-        group = App.get().db.get_group(self.group_id)
+        group = models.GroupModel.get(self.group_id)
 
         u = 0
-        for u in group.users:
-            if utils.get_user_from_id(u).first_name == data:
+        for u in group.members:
+            if utils.get_tg_user_from_model(u).first_name == data:
                 break
 
-        group.users.remove(u)
+        group.members.remove(u)
 
         self.go_to_prev_page(user_id)

@@ -1,11 +1,11 @@
 from telebot import TeleBot, custom_filters, types
 
 from app import App
-from utils import utils
+from database import models
 
 
 def is_group_admin(user_id: int, group_id: int):
-    return App.get().db.get_group(group_id).admin == user_id
+    return models.GroupModel.get(group_id).admin_id == user_id
 
 
 class AskerFilter(custom_filters.SimpleCustomFilter):
@@ -13,7 +13,8 @@ class AskerFilter(custom_filters.SimpleCustomFilter):
 
     def check(self, message: types.Message):
         menu = App.get().menu
-        asker_url = App.get().db.get_data(message.from_user.id)[utils.BotDataKeys.ASKER_URL]
+
+        asker_url = models.UserModel.get(message.from_user.id).asker_url
         return menu.get_action(asker_url).check(message)
 
 

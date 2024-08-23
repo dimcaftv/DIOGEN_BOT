@@ -2,9 +2,9 @@ import os
 
 from telebot import TeleBot
 
+import database.utils
 import menu.utils
 from app import App
-from database import database
 from handlers import callback_handlers, message_handlers
 from utils import commands, filters
 
@@ -19,7 +19,8 @@ def init_bot(bot):
     filters.register_filters(bot)
     App.start(bot)
     menu.utils.set_app_menu()
-    database.set_app_db(bot)
+    database.utils.set_app_db()
+    bot.enable_saving_states('../.state-save/states.pkl')
     bot.set_my_commands(commands.get_commads_list())
 
 

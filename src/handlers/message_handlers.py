@@ -3,12 +3,13 @@ import typing
 from telebot import TeleBot, types
 
 from app import App
+from database import models
 from messages import messages
-from utils import states, utils
+from utils import states
 
 
 def start_cmd_handler(message: types.Message, bot: TeleBot):
-    App.get().db.set_default_state(message.from_user.id)
+    models.UserModel(id=message.from_user.id).save()
     bot.send_message(message.chat.id, messages.start_cmd_text)
 
 
@@ -17,26 +18,27 @@ def help_cmd_handler(message: types.Message, bot: TeleBot):
 
 
 def menu_cmd_handler(message: types.Message, bot: TeleBot):
-    menu_id = App.get().db.get_menu_id(message.from_user.id)
+    u = models.UserModel.get(message.from_user.id)
+    menu_id = u.menu_msg_id
     if menu_id:
         bot.delete_messages(message.chat.id, list(range(menu_id, message.id)))
     bot.delete_message(message.chat.id, message.id)
 
     ans = bot.send_message(message.chat.id, 'Загрузка...')
-    bot.add_data(message.from_user.id, **{utils.BotDataKeys.MENU_MSG_ID: ans.id})
 
+    u.menu_msg_id = ans.id
     App.get().menu.go_to_url(message.from_user.id, 'main')
 
 
 def ask_data_handler(message: types.Message, bot: TeleBot):
     menu = App.get().menu
-    asker_url = App.get().db.get_data(message.from_user.id)[utils.BotDataKeys.ASKER_URL]
+    asker_url = models.UserModel.get(message.from_user.id).asker_url
     menu.get_action(asker_url).wrong_data_handler(message)
 
 
 def ask_data_success_handler(message: types.Message, bot: TeleBot):
     menu = App.get().menu
-    asker_url = App.get().db.get_data(message.from_user.id)[utils.BotDataKeys.ASKER_URL]
+    asker_url = models.UserModel.get(message.from_user.id).asker_url
     menu.get_action(asker_url).correct_data_handler(message)
 
 
