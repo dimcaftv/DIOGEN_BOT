@@ -1,11 +1,5 @@
-from telebot import types
-
-commands_list = [
-    types.BotCommand('start', 'запуск бота'),
-    types.BotCommand('help', 'показать помощь'),
-    types.BotCommand('menu', 'открыть главное меню')
-]
+from telebot import TeleBot
 
 
-def get_commads_list():
-    return commands_list
+def register_commands(bot: TeleBot, commands):
+    bot.set_my_commands(commands)

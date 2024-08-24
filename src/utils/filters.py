@@ -2,6 +2,7 @@ from telebot import TeleBot, custom_filters, types
 
 from app import App
 from database import models
+from utils import utils
 
 
 def is_group_admin(user_id: int, group_id: int):
@@ -18,11 +19,9 @@ class AskerFilter(custom_filters.SimpleCustomFilter):
         return menu.get_action(asker_url).check(message)
 
 
-def register_filters(bot: TeleBot):
-    bot_filters = [custom_filters.StateFilter(bot),
-                   custom_filters.IsDigitFilter(),
-                   custom_filters.TextMatchFilter(),
-                   AskerFilter()]
-
-    for f in bot_filters:
-        bot.add_custom_filter(f)
+def register_filters(bot: TeleBot, filters):
+    for f in filters:
+        args = []
+        if utils.is_init_takes_one_arg(f):
+            args.append(bot)
+        bot.add_custom_filter(f(*args))

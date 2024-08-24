@@ -1,4 +1,5 @@
 from enum import StrEnum
+from types import FunctionType
 from uuid import uuid4
 
 from app import App
@@ -22,3 +23,7 @@ def generate_invite_link():
     while (l := uuid4().hex[:6]) in links:
         continue
     return l
+
+
+def is_init_takes_one_arg(cls):
+    return isinstance(cls.__init__, FunctionType) and cls.__init__.__code__.co_argcount == 2

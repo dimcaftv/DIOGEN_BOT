@@ -1,29 +1,31 @@
-from typing import Self
-
 from telebot import TeleBot, types
 
-from utils.singleton import Singleton
+import settings
+from database import database
+from handlers import callback_handlers, message_handlers
+from menu import menu
+from utils import commands, filters
 
 
-class App(metaclass=Singleton):
-    @classmethod
-    def start(cls, bot: TeleBot):
-        return cls(bot)
+class App:
+    def __init__(self):
+        self.bot = TeleBot(settings.BOT_TOKEN)
+        self.menu = menu.Menu(settings.pages_list, settings.actions_list)
+        self.db = database.DatabaseInterface()
 
-    @classmethod
-    def get(cls) -> Self:
-        return cls()
+    def start(self):
+        self.init_bot()
+        self.bot.infinity_polling(skip_pending=True)
 
-    def __init__(self, bot: TeleBot):
-        self.bot = bot
-        self.menu = None
-        self.db = None
+    def init_bot(self):
+        self.register_bot_handlers()
+        self.bot.enable_saving_states('../.state-save/states.pkl')
 
-    def set_menu(self, menu):
-        self.menu = menu
-
-    def set_db(self, db):
-        self.db = db
+    def register_bot_handlers(self):
+        message_handlers.register_handlers(self.bot, settings.cmd_handlers, settings.kwargs_handlers)
+        callback_handlers.register_handlers(self.bot, settings.callbacks_handlers)
+        filters.register_filters(self.bot, settings.bot_filters)
+        commands.register_commands(self.bot, settings.commands_list)
 
     def process_query(self, query: types.CallbackQuery):
         data, user_id = query.data, query.from_user.id

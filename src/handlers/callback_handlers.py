@@ -1,5 +1,3 @@
-import typing
-
 from telebot import TeleBot, types
 
 from app import App
@@ -11,11 +9,6 @@ def main_callback(query: types.CallbackQuery, bot: TeleBot):
     bot.answer_callback_query(query.id)
 
 
-callbacks: typing.List[typing.Tuple[typing.Callable, typing.Mapping]] = [
-    (main_callback, {'state': '*'})
-]
-
-
-def register_handlers(bot: TeleBot):
-    for cb, kw in callbacks:
+def register_handlers(bot: TeleBot, callbacks_handlers):
+    for cb, kw in callbacks_handlers:
         bot.register_callback_query_handler(cb, None, True, **kw)
