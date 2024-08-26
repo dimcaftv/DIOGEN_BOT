@@ -7,7 +7,10 @@ from handlers import callback_handlers, message_handlers
 from menu import actions, pages
 from utils import filters, states
 
+DEBUG = True
+
 BOT_TOKEN = os.getenv('BOT_TOKEN')
+DB_FULL_PATH = os.getenv('DB_PATH')
 
 cmd_handlers: typing.List[typing.Tuple[typing.Callable, typing.LiteralString]] = [
     (message_handlers.start_cmd_handler, 'start'),

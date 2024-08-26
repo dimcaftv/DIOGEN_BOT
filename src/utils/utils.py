@@ -2,7 +2,7 @@ from enum import StrEnum
 from types import FunctionType
 from uuid import uuid4
 
-from app import App
+from app.app_manager import AppManager
 from database import models
 
 
@@ -15,7 +15,7 @@ class BotDataKeys(StrEnum):
 
 
 def get_tg_user_from_model(user: models.UserModel):
-    return App.get().bot.get_chat_member(user.id, user.id).user
+    return AppManager.get_bot().get_chat_member(user.id, user.id).user
 
 
 def generate_invite_link():

@@ -3,7 +3,7 @@ from urllib.parse import urlencode
 
 from telebot import types
 
-from app import App
+from app.app_manager import AppManager
 from database import models
 from utils import states, utils
 
@@ -37,8 +37,7 @@ class TransferAction(Action):
         return self.url
 
     def do(self, query: types.CallbackQuery):
-        app = App.get()
-        app.menu.go_to_url(query.from_user.id, self.url)
+        AppManager.get_menu().go_to_url(query.from_user.id, self.url)
         u = models.UserModel.get(query.from_user.id)
         u.page_url = self.get_url()
         u.save()
@@ -52,9 +51,8 @@ class DeleteGroupAction(Action):
         self.group_id = int(full_data)
 
     def do(self, query: types.CallbackQuery):
-        app = App.get()
         models.GroupModel.get(self.group_id).delete()
-        app.menu.go_to_url(query.from_user.id, 'grouplist')
+        AppManager.get_menu().go_to_url(query.from_user.id, 'grouplist')
 
     def get_url_params(self):
         return str(self.group_id)
@@ -75,33 +73,30 @@ class AskAction(Action):
         raise NotImplementedError
 
     def do(self, query: types.CallbackQuery):
-        app = App.get()
-        app.bot.send_message(query.message.chat.id, self.ask_text)
-        app.bot.set_state(query.from_user.id, states.ActionStates.ASK)
+        bot = AppManager.get_bot()
+        bot.send_message(query.message.chat.id, self.ask_text)
+        bot.set_state(query.from_user.id, states.ActionStates.ASK)
 
         u = models.UserModel.get(query.from_user.id)
         u.asker_url = self.get_url()
         u.save()
 
     def clear_ask_messages(self, user_id, up_to_msg_id):
-        app = App.get()
         menu_id = models.UserModel.get(user_id).menu_msg_id
-        app.bot.delete_messages(user_id, list(range(menu_id + 1, up_to_msg_id + 1)))
+        AppManager.get_bot().delete_messages(user_id, list(range(menu_id + 1, up_to_msg_id + 1)))
 
     def go_to_prev_page(self, user_id):
-        app = App.get()
         url = models.UserModel.get(user_id).page_url
-        app.menu.go_to_url(user_id, url)
+        AppManager.get_menu().go_to_url(user_id, url)
 
     @abc.abstractmethod
     def process_data(self, user_id, data):
         raise NotImplementedError
 
     def wrong_data_handler(self, message: types.Message):
-        App.get().bot.send_message(message.chat.id, self.wrong_text)
+        AppManager.get_bot().send_message(message.chat.id, self.wrong_text)
 
     def correct_data_handler(self, message: types.Message):
-        app = App.get()
         user_id = message.from_user.id
         self.clear_ask_messages(user_id, message.id)
 
@@ -180,7 +175,6 @@ class JoinGroupAction(AskAction):
         return message.text.lower()
 
     def process_data(self, user_id, data):
-        app = App.get()
         invite = models.GroupInviteModel.get(data)
         group = invite.group
         user = models.UserModel.get(user_id)
@@ -190,7 +184,7 @@ class JoinGroupAction(AskAction):
                 invite.delete()
             group.members.append(user)
 
-        app.menu.go_to_url(user_id, f'group?group={group.id}')
+        AppManager.get_menu().go_to_url(user_id, f'group?group={group.id}')
 
 
 class KickUserAction(AskAction):

@@ -1,6 +1,6 @@
 from telebot import TeleBot, types
 
-from app import App
+from app.app_manager import AppManager
 from database import models
 from messages import messages
 
@@ -24,17 +24,17 @@ def menu_cmd_handler(message: types.Message, bot: TeleBot):
     ans = bot.send_message(message.chat.id, 'Загрузка...')
 
     u.menu_msg_id = ans.id
-    App.get().menu.go_to_url(message.from_user.id, 'main')
+    AppManager.get_menu().go_to_url(message.from_user.id, 'main')
 
 
 def ask_data_handler(message: types.Message, bot: TeleBot):
-    menu = App.get().menu
+    menu = AppManager.get_menu()
     asker_url = models.UserModel.get(message.from_user.id).asker_url
     menu.get_action(asker_url).wrong_data_handler(message)
 
 
 def ask_data_success_handler(message: types.Message, bot: TeleBot):
-    menu = App.get().menu
+    menu = AppManager.get_menu()
     asker_url = models.UserModel.get(message.from_user.id).asker_url
     menu.get_action(asker_url).correct_data_handler(message)
 

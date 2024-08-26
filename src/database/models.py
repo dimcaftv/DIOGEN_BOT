@@ -3,24 +3,24 @@ from typing import Self
 from sqlalchemy import BigInteger, ForeignKey, select
 from sqlalchemy.orm import Mapped, as_declarative, mapped_column, relationship
 
-from app import App
+from app.app_manager import AppManager
 
 
 @as_declarative()
 class AbstractModel:
     def save(self):
-        App.get().db.save(self)
+        AppManager.get_db().save(self)
 
     def delete(self):
-        App.get().db.delete(self)
+        AppManager.get_db().delete(self)
 
     @classmethod
     def get(cls, pk) -> Self:
-        return App.get().db.get(cls, pk)
+        return AppManager.get_db().get(cls, pk)
 
     @classmethod
     def select(cls, *where):
-        return App.get().db.exec(select(cls).where(*where))
+        return AppManager.get_db().exec(select(cls).where(*where))
 
 
 class UserModel(AbstractModel):

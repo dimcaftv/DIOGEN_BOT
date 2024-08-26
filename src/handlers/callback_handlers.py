@@ -1,11 +1,12 @@
 from telebot import TeleBot, types
 
-from app import App
+from app.app_manager import AppManager
 
 
 def main_callback(query: types.CallbackQuery, bot: TeleBot):
-    App.get().process_query(query)
-
+    data, user_id = query.data, query.from_user.id
+    action = AppManager.get_menu().get_action(data)
+    action.do(query)
     bot.answer_callback_query(query.id)
 
 

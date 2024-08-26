@@ -2,12 +2,13 @@ import sqlalchemy
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
+import settings
 from . import models
 
 
 class SQLDatabaseManager:
     def __init__(self):
-        self.engine = sqlalchemy.create_engine('sqlite+pysqlite:///../.state-save/db.sqlite', echo=True)
+        self.engine = sqlalchemy.create_engine(f'sqlite+pysqlite:///{settings.DB_FULL_PATH}', echo=settings.DEBUG)
         self.session = Session(self.engine)
         models.AbstractModel.metadata.create_all(self.engine)
 

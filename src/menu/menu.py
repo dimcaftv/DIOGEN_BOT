@@ -3,7 +3,7 @@ from urllib.parse import parse_qs, urlparse
 
 from telebot import util
 
-from app import App
+from app.app_manager import AppManager
 from database import models
 from menu import actions
 from utils import states, utils
@@ -64,10 +64,10 @@ class Menu:
         self.actions = {a.key: a for a in actions_list} if actions_list else {}
 
     def update_to_page(self, page: AbsMenuPage):
-        app = App.get()
+        bot = AppManager.get_bot()
         menu_id = page.user.menu_msg_id
-        app.bot.set_state(page.user.id, page.state)
-        app.bot.edit_message_text(chat_id=page.user.id,
+        bot.set_state(page.user.id, page.state)
+        bot.edit_message_text(chat_id=page.user.id,
                                   message_id=menu_id,
                                   **page.get_message_kw())
 

@@ -1,6 +1,7 @@
-from telebot import TeleBot, types
+from telebot import TeleBot
 
 import settings
+from app.app_manager import AppManager
 from database import database
 from handlers import callback_handlers, message_handlers
 from menu import menu
@@ -12,6 +13,7 @@ class App:
         self.bot = TeleBot(settings.BOT_TOKEN)
         self.menu = menu.Menu(settings.pages_list, settings.actions_list)
         self.db = database.DatabaseInterface()
+        self.app_manager = AppManager(self)
 
     def start(self):
         self.init_bot()
@@ -26,8 +28,3 @@ class App:
         callback_handlers.register_handlers(self.bot, settings.callbacks_handlers)
         filters.register_filters(self.bot, settings.bot_filters)
         commands.register_commands(self.bot, settings.commands_list)
-
-    def process_query(self, query: types.CallbackQuery):
-        data, user_id = query.data, query.from_user.id
-        action = self.menu.get_action(data)
-        action.do(query)

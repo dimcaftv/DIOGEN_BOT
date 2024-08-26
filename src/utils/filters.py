@@ -1,6 +1,6 @@
 from telebot import TeleBot, custom_filters, types
 
-from app import App
+from app.app_manager import AppManager
 from database import models
 from utils import utils
 
@@ -13,10 +13,8 @@ class AskerFilter(custom_filters.SimpleCustomFilter):
     key = 'pass_asker'
 
     def check(self, message: types.Message):
-        menu = App.get().menu
-
         asker_url = models.UserModel.get(message.from_user.id).asker_url
-        return menu.get_action(asker_url).check(message)
+        return AppManager.get_menu().get_action(asker_url).check(message)
 
 
 def register_filters(bot: TeleBot, filters):
