@@ -10,7 +10,9 @@ class BotPagesStates(StatesGroup):
     MAIN = State()
     GROUPLIST = State()
     GROUP = State()
-    HOMEWORK = State()
+    TIMETABLE = State()
+    DAY = State()
+    LESSON = State()
     USERSLIST = State()
     ACTIVE_INVITES = State()
 

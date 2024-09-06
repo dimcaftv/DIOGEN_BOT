@@ -12,6 +12,8 @@ DEBUG = True
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 DB_FULL_PATH = os.getenv('DB_PATH')
 
+MEDIA_STORAGE_TG_ID = os.getenv('MEDIA_STORAGE_ID')
+
 cmd_handlers: typing.List[typing.Tuple[typing.Callable, typing.LiteralString]] = [
     (message_handlers.start_cmd_handler, 'start'),
     (message_handlers.help_cmd_handler, 'help'),
@@ -42,7 +44,9 @@ pages_list = [
     pages.MainPage,
     pages.GroupListPage,
     pages.GroupPage,
-    pages.HomeworkPage,
+    pages.TimetablePage,
+    pages.DayPage,
+    pages.LessonPage,
     pages.UsersListPage,
     pages.ActiveInvitesPage
 ]
