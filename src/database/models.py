@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Self
 
-from sqlalchemy import BigInteger, Date, ForeignKey, select
+from sqlalchemy import BigInteger, Date, ForeignKey, delete, inspect, select
 from sqlalchemy.orm import Mapped, as_declarative, mapped_column, relationship
 
 from app.app_manager import AppManager
@@ -19,11 +19,15 @@ class AbstractModel:
 
     @classmethod
     def get(cls, pk) -> Self:
-        return AppManager.get_db().get(cls, pk)
+        return AppManager.get_db().exec(select(cls).where(inspect(cls).mapper.primary_key[0] == pk)).one_or_none()
 
     @classmethod
     def select(cls, *where):
         return AppManager.get_db().exec(select(cls).where(*where))
+
+    @classmethod
+    def delete_where(cls, *where):
+        AppManager.get_db().session.execute(delete(cls).where(*where))
 
 
 class UserModel(AbstractModel):
@@ -32,7 +36,7 @@ class UserModel(AbstractModel):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     page_url: Mapped[str] = mapped_column(default='main')
     asker_url: Mapped[str] = mapped_column(nullable=True)
-    menu_msg_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
+    menu_msg_id: Mapped[int] = mapped_column(BigInteger, default=1)
 
     admin_in: Mapped[list['GroupModel']] = relationship(back_populates='admin', uselist=True)
     groups: Mapped[list['GroupModel']] = relationship(back_populates='members', uselist=True, secondary="user_to_group")

@@ -3,9 +3,11 @@ from urllib.parse import urlencode
 
 from telebot import types
 
+import settings
 from app.app_manager import AppManager
 from database import models
 from utils import states, utils
+from utils.calendar import Week
 
 
 class Action(abc.ABC):
@@ -58,6 +60,53 @@ class DeleteGroupAction(Action):
         return str(self.group_id)
 
 
+class CopyPrevTimetableAction(Action):
+    key = 'copy_prev_timetable'
+    take_params = True
+
+    def __init__(self, group_id=None, week=None, full_data: str = None):
+        if full_data:
+            part = full_data.split('&')
+            self.group_id = int(part[0])
+            self.week = Week.from_str(part[1])
+        else:
+            self.group_id = group_id
+            self.week = week
+
+    def get_url_params(self):
+        return str(self.group_id) + '&' + str(self.week)
+
+    def do(self, query: types.CallbackQuery):
+        pweek = self.week.prev()
+        lessons = []
+        for d1, d2 in zip(pweek, self.week):
+            models.LessonModel.delete_where(models.LessonModel.date == d2, models.LessonModel.group_id == self.group_id)
+            for l in models.LessonModel.select(models.LessonModel.date == d1,
+                                               models.LessonModel.group_id == self.group_id).all():
+                lessons.append(models.LessonModel(date=d2, group_id=self.group_id, name=l.name))
+        AppManager.get_db().session.add_all(lessons)
+        AppManager.get_db().commit()
+
+
+class ViewHomeworkAction(Action):
+    key = 'view_homework'
+    take_params = True
+
+    def __init__(self, full_data=None):
+        self.lesson_id = int(full_data)
+
+    def get_url_params(self):
+        return str(self.lesson_id)
+
+    def do(self, query: types.CallbackQuery):
+        solutions = [s.msg_id for s in
+                     models.SolutionModel.select(models.SolutionModel.lesson_id == self.lesson_id).all()]
+        if not solutions:
+            return
+        bot = AppManager.get_bot()
+        bot.copy_messages(query.from_user.id, settings.MEDIA_STORAGE_TG_ID, solutions)
+
+
 class AskAction(Action):
     key = 'ask_action'
 
@@ -81,10 +130,6 @@ class AskAction(Action):
         u.asker_url = self.get_url()
         u.save()
 
-    def clear_ask_messages(self, user_id, up_to_msg_id):
-        menu_id = models.UserModel.get(user_id).menu_msg_id
-        AppManager.get_bot().delete_messages(user_id, list(range(menu_id + 1, up_to_msg_id + 1)))
-
     def go_to_prev_page(self, user_id):
         url = models.UserModel.get(user_id).page_url
         AppManager.get_menu().go_to_url(user_id, url)
@@ -98,9 +143,9 @@ class AskAction(Action):
 
     def correct_data_handler(self, message: types.Message):
         user_id = message.from_user.id
-        self.clear_ask_messages(user_id, message.id)
+        utils.delete_all_after_menu(user_id, message.id)
 
-        u = models.UserModel.get(message.from_user.id)
+        u = models.UserModel.get(user_id)
         u.asker_url = None
         u.save()
 
@@ -220,3 +265,88 @@ class KickUserAction(AskAction):
         group.members.remove(u)
 
         self.go_to_prev_page(user_id)
+
+
+class CreateTimetableAction(AskAction):
+    key = 'create_timetable'
+    take_params = True
+
+    def __init__(self, group_id=None, week=None, full_data: str = None):
+        super().__init__(
+                'Введи уроки для каждого дня недели на новой строке через пробел ("-" если нет уроков)',
+                'Бро, введи нормальное расписание'
+        )
+        if full_data:
+            part = full_data.split('&')
+            self.group_id = int(part[0])
+            self.week = Week.from_str(part[1])
+        else:
+            self.group_id = group_id
+            self.week = week
+
+    def get_url_params(self):
+        return str(self.group_id) + '&' + str(self.week)
+
+    def check(self, message: types.Message) -> bool:
+        part = message.text.split('\n')
+        return len(part) == 7 and all(p.strip() for p in part)
+
+    def extract_data(self, message: types.Message):
+        return message.text
+
+    def process_data(self, user_id, data):
+        timetable = [p.strip().split() for p in data.split('\n')]
+
+        lessons = []
+        for d, t in zip(self.week, timetable):
+            models.LessonModel.delete_where(models.LessonModel.date == d, models.LessonModel.group_id == self.group_id)
+            if t[0] == '-':
+                continue
+            for l in t:
+                lessons.append(models.LessonModel(date=d, group_id=self.group_id, name=l))
+        AppManager.get_db().session.add_all(lessons)
+        AppManager.get_db().commit()
+
+        self.go_to_prev_page(user_id)
+
+
+class AddHomeworkAction(AskAction):
+    key = 'add_homework'
+    take_params = True
+
+    def __init__(self, full_data):
+        super().__init__(
+                'Отправь сюда сколько можешь сообщений дз и напиши /stop',
+                'Сохраненяю...'
+        )
+        self.lesson_id = int(full_data)
+
+    def get_url_params(self):
+        return str(self.lesson_id)
+
+    def check(self, message: types.Message) -> bool:
+        return message.text not in ['/stop', 'stop']
+
+    def extract_data(self, message: types.Message):
+        pass
+
+    def process_data(self, user_id, data):
+        pass
+
+    def wrong_data_handler(self, message: types.Message):
+        super().wrong_data_handler(message)
+        utils.delete_all_after_menu(message.from_user.id, message.id + 1)
+
+        u = models.UserModel.get(message.from_user.id)
+        u.asker_url = None
+
+        db = AppManager.get_db()
+        db.session.add(u)
+        db.commit()
+
+        self.go_to_prev_page(message.from_user.id)
+
+    def correct_data_handler(self, message: types.Message):
+        solution = AppManager.get_bot().copy_message(settings.MEDIA_STORAGE_TG_ID, message.from_user.id,
+                                                     message.id).message_id
+        AppManager.get_db().session.add(models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution))

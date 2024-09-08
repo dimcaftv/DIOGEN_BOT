@@ -1,11 +1,9 @@
 from datetime import date
 
-import sqlalchemy
-
-from app.app_manager import AppManager
 from database import models
-from menu.actions import (CreateGroupAction, CreateInviteAction, DeleteGroupAction, JoinGroupAction, KickUserAction,
-                          TransferAction)
+from menu.actions import (AddHomeworkAction, CopyPrevTimetableAction, CreateGroupAction, CreateInviteAction,
+                          CreateTimetableAction, DeleteGroupAction, JoinGroupAction, KickUserAction, TransferAction,
+                          ViewHomeworkAction)
 from menu.menu import AbsMenuPage, MenuItem
 from utils import filters, states, utils
 from utils.calendar import Week
@@ -79,6 +77,8 @@ class TimetablePage(AbsMenuPage):
     def get_items(self) -> list[MenuItem]:
         self.group = models.GroupModel.get(self.query_data['group'])
         self.week = Week.from_str(self.query_data['week']) if 'week' in self.query_data else Week.today()
+
+        is_admin = filters.is_group_admin(self.user.id, self.group.id)
         items = [
                     MenuItem('<', TransferAction('timetable', {'group': self.group.id, 'week': str(self.week.prev())})),
                     MenuItem('>', TransferAction('timetable', {'group': self.group.id, 'week': str(self.week.next())}))
@@ -86,6 +86,9 @@ class TimetablePage(AbsMenuPage):
                     MenuItem(d.strftime('%d.%m'), TransferAction('daypage', {'group': self.group.id, 'date': str(d)}))
                     for d in self.week
                 ] + [
+            MenuItem('добавить на эту неделю', CreateTimetableAction(self.group.id, self.week)),
+            MenuItem('копировать с прошлой недели', CopyPrevTimetableAction(self.group.id, self.week))
+        ] * is_admin + [
                     MenuItem('назад', TransferAction('group', {'group': self.group.id}))
                 ]
         return items
@@ -102,9 +105,8 @@ class DayPage(AbsMenuPage):
         self.group = models.GroupModel.get(self.query_data['group'])
         self.date = date.fromisoformat(self.query_data['date'])
 
-        lessons: sqlalchemy.Sequence = AppManager.get_db().exec(sqlalchemy.select(models.LessonModel)
-                                                                .where(models.LessonModel.date == self.date,
-                                                                       models.LessonModel.group_id == self.group.id)).all()
+        lessons = models.LessonModel.select(models.LessonModel.date == self.date,
+                                            models.LessonModel.group_id == self.group.id).all()
         items = [
                     MenuItem(i.name, TransferAction('lesson', {'group': self.group.id, 'lesson_id': i.id}))
                     for i in lessons
@@ -126,6 +128,8 @@ class LessonPage(AbsMenuPage):
         self.lesson = models.LessonModel.get(self.query_data['lesson_id'])
 
         items = [
+            MenuItem('посмотреть', ViewHomeworkAction(self.lesson.id)),
+            MenuItem('добавить', AddHomeworkAction(self.lesson.id)),
             MenuItem('назад', TransferAction('daypage', {'group': self.lesson.group_id, 'date': str(self.lesson.date)}))
         ]
 

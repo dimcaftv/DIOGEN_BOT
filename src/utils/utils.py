@@ -27,3 +27,12 @@ def generate_invite_link():
 
 def is_init_takes_one_arg(cls):
     return isinstance(cls.__init__, FunctionType) and cls.__init__.__code__.co_argcount == 2
+
+
+def delete_messages_range(user_id, from_id, to_id):
+    AppManager.get_bot().delete_messages(user_id, list(range(from_id, to_id + 1)))
+
+
+def delete_all_after_menu(user_id, to_id):
+    menu_id = models.UserModel.get(user_id).menu_msg_id
+    delete_messages_range(user_id, menu_id + 1, to_id)

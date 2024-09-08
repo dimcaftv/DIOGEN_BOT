@@ -78,9 +78,12 @@ class Menu:
             return action(full_data=part[2])
         return action()
 
+    def get_page_class(self, path):
+        return self.pages[path]
+
     def get_page(self, user_id: int, url: str, data: dict = None):
         parse = urlparse(url)
-        return self.pages[parse.path](user_id, parse.query, data)
+        return self.get_page_class(parse.path)(user_id, parse.query, data)
 
     def go_to_url(self, user_id: int, url: str, data: dict = None):
         page = self.get_page(user_id, url, data)

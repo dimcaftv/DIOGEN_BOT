@@ -1,8 +1,11 @@
+from urllib.parse import urlparse
+
 from telebot import TeleBot, types
 
 from app.app_manager import AppManager
 from database import models
 from messages import messages
+from utils import utils
 
 
 def start_cmd_handler(message: types.Message, bot: TeleBot):
@@ -16,10 +19,7 @@ def help_cmd_handler(message: types.Message, bot: TeleBot):
 
 def menu_cmd_handler(message: types.Message, bot: TeleBot):
     u = models.UserModel.get(message.from_user.id)
-    menu_id = u.menu_msg_id
-    if menu_id:
-        bot.delete_messages(message.chat.id, list(range(menu_id, message.id)))
-    bot.delete_message(message.chat.id, message.id)
+    utils.delete_messages_range(u.id, u.menu_msg_id, message.id)
 
     ans = bot.send_message(message.chat.id, 'Загрузка...')
 
@@ -27,7 +27,15 @@ def menu_cmd_handler(message: types.Message, bot: TeleBot):
     AppManager.get_menu().go_to_url(message.from_user.id, 'main')
 
 
-def ask_data_handler(message: types.Message, bot: TeleBot):
+def back_cmd_handler(message: types.Message, bot: TeleBot):
+    user_id = message.from_user.id
+    url = models.UserModel.get(user_id).page_url
+    state = AppManager.get_menu().get_page_class(urlparse(url).path).state
+    bot.set_state(user_id, state)
+    utils.delete_all_after_menu(user_id, message.id)
+
+
+def ask_data_wrong_handler(message: types.Message, bot: TeleBot):
     menu = AppManager.get_menu()
     asker_url = models.UserModel.get(message.from_user.id).asker_url
     menu.get_action(asker_url).wrong_data_handler(message)

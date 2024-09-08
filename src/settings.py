@@ -17,12 +17,13 @@ MEDIA_STORAGE_TG_ID = os.getenv('MEDIA_STORAGE_ID')
 cmd_handlers: typing.List[typing.Tuple[typing.Callable, typing.LiteralString]] = [
     (message_handlers.start_cmd_handler, 'start'),
     (message_handlers.help_cmd_handler, 'help'),
-    (message_handlers.menu_cmd_handler, 'menu')
+    (message_handlers.menu_cmd_handler, 'menu'),
+    (message_handlers.back_cmd_handler, 'back')
 ]
 
 kwargs_handlers: typing.List[typing.Tuple[typing.Callable, typing.Mapping]] = [
     (message_handlers.ask_data_success_handler, {'state': states.ActionStates.ASK, 'pass_asker': True}),
-    (message_handlers.ask_data_handler, {'state': states.ActionStates.ASK})
+    (message_handlers.ask_data_wrong_handler, {'state': states.ActionStates.ASK})
 ]
 
 callbacks_handlers: typing.List[typing.Tuple[typing.Callable, typing.Mapping]] = [
@@ -32,7 +33,8 @@ callbacks_handlers: typing.List[typing.Tuple[typing.Callable, typing.Mapping]] =
 commands_list = [
     types.BotCommand('start', 'запуск бота'),
     types.BotCommand('help', 'показать помощь'),
-    types.BotCommand('menu', 'открыть главное меню')
+    types.BotCommand('menu', 'открыть главное меню'),
+    types.BotCommand('back', 'отменить текущее действие')
 ]
 
 bot_filters = [custom_filters.StateFilter,
@@ -57,5 +59,9 @@ actions_list = [
     actions.DeleteGroupAction,
     actions.CreateInviteAction,
     actions.JoinGroupAction,
-    actions.KickUserAction
+    actions.KickUserAction,
+    actions.CreateTimetableAction,
+    actions.CopyPrevTimetableAction,
+    actions.ViewHomeworkAction,
+    actions.AddHomeworkAction
 ]
