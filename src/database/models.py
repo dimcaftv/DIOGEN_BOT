@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Self
 
-from sqlalchemy import BigInteger, Date, ForeignKey, delete, inspect, select
+from sqlalchemy import BigInteger, Date, ForeignKey, delete, select
 from sqlalchemy.orm import Mapped, as_declarative, mapped_column, relationship
 
 from app.app_manager import AppManager
@@ -18,8 +18,8 @@ class AbstractModel:
         AppManager.get_db().delete(self)
 
     @classmethod
-    def get(cls, pk) -> Self:
-        return AppManager.get_db().exec(select(cls).where(inspect(cls).mapper.primary_key[0] == pk)).one_or_none()
+    def get(cls, *pks) -> Self:
+        return AppManager.get_db().session.get(cls, tuple(pks))
 
     @classmethod
     def select(cls, *where):
@@ -34,12 +34,15 @@ class UserModel(AbstractModel):
     __tablename__ = 'users'
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    username: Mapped[str] = mapped_column()
     page_url: Mapped[str] = mapped_column(default='main')
     asker_url: Mapped[str] = mapped_column(nullable=True)
-    menu_msg_id: Mapped[int] = mapped_column(BigInteger, default=1)
+    menu_msg_id: Mapped[int] = mapped_column(BigInteger)
+    fav_group_id: Mapped[int] = mapped_column(nullable=True)
 
     admin_in: Mapped[list['GroupModel']] = relationship(back_populates='admin', uselist=True)
     groups: Mapped[list['GroupModel']] = relationship(back_populates='members', uselist=True, secondary="user_to_group")
+    solutions: Mapped[list['SolutionModel']] = relationship(back_populates='author', uselist=True)
 
 
 class GroupModel(AbstractModel):
@@ -99,3 +102,7 @@ class SolutionModel(AbstractModel):
     lesson_id: Mapped[int] = mapped_column(ForeignKey('lessons.id', ondelete='CASCADE'), nullable=False)
 
     msg_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+    author: Mapped['UserModel'] = relationship(back_populates='solutions', uselist=False)
+    author_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'))
+    created: Mapped[date] = mapped_column(Date)

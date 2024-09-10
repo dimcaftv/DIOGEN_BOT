@@ -7,6 +7,15 @@ class Week:
     week: int
     year: int
 
+    @staticmethod
+    def weekday_name(d: date) -> str:
+        m = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+        return m[d.weekday()]
+
+    @classmethod
+    def standart_day_format(cls, d: date) -> str:
+        return f'{cls.weekday_name(d)} - {d.strftime("%d.%m")}'
+
     def next(self):
         nw = Week(self.week % 53 + 1, self.year + (self.week == 53))
         if nw[0] == self[0]:

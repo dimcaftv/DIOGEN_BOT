@@ -1,3 +1,4 @@
+import math
 from enum import StrEnum
 from types import FunctionType
 from uuid import uuid4
@@ -30,7 +31,10 @@ def is_init_takes_one_arg(cls):
 
 
 def delete_messages_range(user_id, from_id, to_id):
-    AppManager.get_bot().delete_messages(user_id, list(range(from_id, to_id + 1)))
+    bot = AppManager.get_bot()
+    l = to_id - from_id + 1
+    for i in range(math.ceil(l / 100)):
+        bot.delete_messages(user_id, list(range(from_id + i * 100, min(from_id + (i + 1) * 100, to_id + 1))))
 
 
 def delete_all_after_menu(user_id, to_id):

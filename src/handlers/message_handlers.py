@@ -9,7 +9,7 @@ from utils import utils
 
 
 def start_cmd_handler(message: types.Message, bot: TeleBot):
-    models.UserModel(id=message.from_user.id).save()
+    models.UserModel(id=message.from_user.id, username=message.from_user.username, menu_msg_id=message.id).save()
     bot.send_message(message.chat.id, messages.start_cmd_text)
 
 
@@ -33,6 +33,7 @@ def back_cmd_handler(message: types.Message, bot: TeleBot):
     state = AppManager.get_menu().get_page_class(urlparse(url).path).state
     bot.set_state(user_id, state)
     utils.delete_all_after_menu(user_id, message.id)
+    bot.get_chat_member()
 
 
 def ask_data_wrong_handler(message: types.Message, bot: TeleBot):

@@ -317,7 +317,7 @@ class AddHomeworkAction(AskAction):
     def __init__(self, full_data):
         super().__init__(
                 'Отправь сюда сколько можешь сообщений дз и напиши /stop',
-                'Сохраненяю...'
+                'Сохраняю...'
         )
         self.lesson_id = int(full_data)
 

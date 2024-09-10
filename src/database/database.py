@@ -7,7 +7,7 @@ from . import models
 
 class SQLDatabaseManager:
     def __init__(self):
-        self.engine = sqlalchemy.create_engine(f'sqlite+pysqlite:///{settings.DB_FULL_PATH}', echo=settings.DEBUG)
+        self.engine = sqlalchemy.create_engine(f'{settings.DB_FULL_PATH}', echo=settings.DEBUG)
         self.session = Session(self.engine)
         models.AbstractModel.metadata.create_all(self.engine)
 

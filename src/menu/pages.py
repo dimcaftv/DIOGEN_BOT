@@ -19,7 +19,7 @@ class MainPage(AbsMenuPage):
         ]
 
     def get_page_text(self) -> str:
-        return f'Hey {self.tg_user.first_name}, this is MAIN PAGE'
+        return f'Главное меню'
 
 
 class GroupListPage(AbsMenuPage):
@@ -41,8 +41,7 @@ class GroupListPage(AbsMenuPage):
         ]
 
     def get_page_text(self) -> str:
-        return f'Hey {self.tg_user.first_name}, this is GROUPLIST PAGE\n' + '\n'.join(
-                f'{i}: {g.name}' for i, g in enumerate(self.groups, start=1))
+        return f'Список групп:\n' + '\n'.join(g.name for g in self.groups)
 
 
 class GroupPage(AbsMenuPage):
@@ -66,8 +65,7 @@ class GroupPage(AbsMenuPage):
         return items
 
     def get_page_text(self) -> str:
-        return (f'Hey {self.tg_user.first_name}, this is {self.group.name} group PAGE\nusers: ' +
-                ', '.join(utils.get_tg_user_from_model(u).first_name for u in self.group.members))
+        return f'Группа {self.group.name}'
 
 
 class TimetablePage(AbsMenuPage):
@@ -83,18 +81,19 @@ class TimetablePage(AbsMenuPage):
                     MenuItem('<', TransferAction('timetable', {'group': self.group.id, 'week': str(self.week.prev())})),
                     MenuItem('>', TransferAction('timetable', {'group': self.group.id, 'week': str(self.week.next())}))
                 ] + [
-                    MenuItem(d.strftime('%d.%m'), TransferAction('daypage', {'group': self.group.id, 'date': str(d)}))
+            MenuItem(Week.standart_day_format(d),
+                     TransferAction('daypage', {'group': self.group.id, 'date': str(d)}))
                     for d in self.week
                 ] + [
-            MenuItem('добавить на эту неделю', CreateTimetableAction(self.group.id, self.week)),
-            MenuItem('копировать с прошлой недели', CopyPrevTimetableAction(self.group.id, self.week))
-        ] * is_admin + [
+                    MenuItem('добавить на эту неделю', CreateTimetableAction(self.group.id, self.week)),
+                    MenuItem('копировать с прошлой недели', CopyPrevTimetableAction(self.group.id, self.week))
+                ] * is_admin + [
                     MenuItem('назад', TransferAction('group', {'group': self.group.id}))
                 ]
         return items
 
     def get_page_text(self) -> str:
-        return f'Hey {self.tg_user.first_name}, this is {self.group.name} timetable PAGE\n'
+        return f'Расписание группы {self.group.name}'
 
 
 class DayPage(AbsMenuPage):
@@ -117,7 +116,7 @@ class DayPage(AbsMenuPage):
         return items
 
     def get_page_text(self) -> str:
-        return f'Hey {self.tg_user.first_name}, this is {self.group.name} {str(self.date)} day PAGE\n'
+        return f'Уроки на {Week.standart_day_format(self.date)}:'
 
 
 class LessonPage(AbsMenuPage):
@@ -136,7 +135,8 @@ class LessonPage(AbsMenuPage):
         return items
 
     def get_page_text(self) -> str:
-        return f'Hey {self.tg_user.first_name}, this is "{self.lesson.name}" lesson on {str(self.lesson.date)}\nNotes: {self.lesson.notes}'
+        return (f'"{self.lesson.name}" {Week.standart_day_format(self.lesson.date)}\n' +
+                (f'Доп. задание: {self.lesson.notes}' if self.lesson.notes else ''))
 
 
 class UsersListPage(AbsMenuPage):
@@ -151,8 +151,8 @@ class UsersListPage(AbsMenuPage):
         return items
 
     def get_page_text(self) -> str:
-        return (f'Hey {self.tg_user.first_name}, this is {self.group.name} userlist PAGE\nusers: ' +
-                ', '.join(utils.get_tg_user_from_model(u).first_name for u in self.group.members))
+        return (f'Участники {self.group.name}:\n' +
+                ', '.join(utils.get_tg_user_from_model(u).username for u in self.group.members))
 
 
 class ActiveInvitesPage(AbsMenuPage):
@@ -164,6 +164,6 @@ class ActiveInvitesPage(AbsMenuPage):
         return [MenuItem('назад', TransferAction('group', {'group': self.group.id}))]
 
     def get_page_text(self) -> str:
-        return (f'Hey {self.tg_user.first_name}, this is {self.group.name} invites PAGE\ninvites: ' +
+        return (f'Приглашения для группы {self.group.name}:\n' +
                 '\n'.join(f'{i.link} - Осталось использований: {i.remain_uses}'
                           for i in models.GroupModel.get(self.group.id).invites))
