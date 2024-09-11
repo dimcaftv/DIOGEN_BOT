@@ -37,6 +37,6 @@ def delete_messages_range(user_id, from_id, to_id):
         bot.delete_messages(user_id, list(range(from_id + i * 100, min(from_id + (i + 1) * 100, to_id + 1))))
 
 
-def delete_all_after_menu(user_id, to_id):
+def delete_all_after_menu(user_id, last_id):
     menu_id = models.UserModel.get(user_id).menu_msg_id
-    delete_messages_range(user_id, menu_id + 1, to_id)
+    delete_messages_range(user_id, menu_id + 1, last_id)

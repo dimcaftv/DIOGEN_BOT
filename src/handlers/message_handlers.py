@@ -1,9 +1,8 @@
-from urllib.parse import urlparse
-
 from telebot import TeleBot, types
 
 from app.app_manager import AppManager
 from database import models
+from menu.actions import TransferAction
 from messages import messages
 from utils import utils
 
@@ -24,16 +23,15 @@ def menu_cmd_handler(message: types.Message, bot: TeleBot):
     ans = bot.send_message(message.chat.id, 'Загрузка...')
 
     u.menu_msg_id = ans.id
-    AppManager.get_menu().go_to_url(message.from_user.id, 'main')
+    url = 'main'
+    if u.fav_group_id:
+        url = TransferAction('group', {'group': u.fav_group_id}).url
+    AppManager.get_menu().go_to_url(message.from_user.id, url)
 
 
 def back_cmd_handler(message: types.Message, bot: TeleBot):
     user_id = message.from_user.id
-    url = models.UserModel.get(user_id).page_url
-    state = AppManager.get_menu().get_page_class(urlparse(url).path).state
-    bot.set_state(user_id, state)
-    utils.delete_all_after_menu(user_id, message.id)
-    bot.get_chat_member()
+    AppManager.get_menu().return_to_prev_page(user_id, message.id)
 
 
 def ask_data_wrong_handler(message: types.Message, bot: TeleBot):

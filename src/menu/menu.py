@@ -63,13 +63,18 @@ class Menu:
         self.pages = {p.urlpath: p for p in pages} if pages else {}
         self.actions = {a.key: a for a in actions_list} if actions_list else {}
 
-    def update_to_page(self, page: AbsMenuPage):
+    def update_to_page(self, page: AbsMenuPage, url: str):
         bot = AppManager.get_bot()
         menu_id = page.user.menu_msg_id
+
+        u = page.user
+        u.page_url = url
+        u.save()
+
         bot.set_state(page.user.id, page.state)
         bot.edit_message_text(chat_id=page.user.id,
-                                  message_id=menu_id,
-                                  **page.get_message_kw())
+                              message_id=menu_id,
+                              **page.get_message_kw())
 
     def get_action(self, callback_data: str) -> actions.Action:
         part = callback_data.partition(':')
@@ -87,4 +92,18 @@ class Menu:
 
     def go_to_url(self, user_id: int, url: str, data: dict = None):
         page = self.get_page(user_id, url, data)
-        self.update_to_page(page)
+        self.update_to_page(page, url)
+
+    def go_to_last_url(self, user_id: int):
+        self.go_to_url(user_id, self.get_last_url(user_id))
+
+    def get_last_url(self, user_id: int):
+        return models.UserModel.get(user_id).page_url
+
+    def set_prev_state(self, user_id: int):
+        state = self.get_page_class(urlparse(self.get_last_url(user_id)).path).state
+        AppManager.get_bot().set_state(user_id, state)
+
+    def return_to_prev_page(self, user_id: int, last_msg_id: int):
+        self.set_prev_state(user_id)
+        utils.delete_all_after_menu(user_id, last_msg_id)

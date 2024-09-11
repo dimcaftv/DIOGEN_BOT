@@ -1,4 +1,5 @@
 import abc
+from datetime import date
 from urllib.parse import urlencode
 
 from telebot import types
@@ -40,9 +41,6 @@ class TransferAction(Action):
 
     def do(self, query: types.CallbackQuery):
         AppManager.get_menu().go_to_url(query.from_user.id, self.url)
-        u = models.UserModel.get(query.from_user.id)
-        u.page_url = self.get_url()
-        u.save()
 
 
 class DeleteGroupAction(Action):
@@ -105,6 +103,7 @@ class ViewHomeworkAction(Action):
             return
         bot = AppManager.get_bot()
         bot.copy_messages(query.from_user.id, settings.MEDIA_STORAGE_TG_ID, solutions)
+        bot.send_message(query.from_user.id, 'Назад - /back')
 
 
 class AskAction(Action):
@@ -129,10 +128,6 @@ class AskAction(Action):
         u = models.UserModel.get(query.from_user.id)
         u.asker_url = self.get_url()
         u.save()
-
-    def go_to_prev_page(self, user_id):
-        url = models.UserModel.get(user_id).page_url
-        AppManager.get_menu().go_to_url(user_id, url)
 
     @abc.abstractmethod
     def process_data(self, user_id, data):
@@ -169,9 +164,12 @@ class CreateGroupAction(AskAction):
 
     def process_data(self, user_id, data):
         u = models.UserModel.get(user_id)
-        models.GroupModel(name=data, admin=u, members=[u]).save()
-
-        self.go_to_prev_page(user_id)
+        g = models.GroupModel(name=data, admin=u, members=[u])
+        if len(u.groups) == 1:
+            u.fav_group_id = g.id
+        AppManager.get_db().session.add_all([g, u])
+        AppManager.get_db().commit()
+        AppManager.get_menu().go_to_last_url(user_id)
 
 
 class CreateInviteAction(AskAction):
@@ -199,7 +197,7 @@ class CreateInviteAction(AskAction):
     def process_data(self, user_id, n):
         models.GroupInviteModel(link=utils.generate_invite_link(), group_id=self.group_id, remain_uses=n).save()
 
-        self.go_to_prev_page(user_id)
+        AppManager.get_menu().set_prev_state(user_id)
 
 
 class JoinGroupAction(AskAction):
@@ -228,6 +226,8 @@ class JoinGroupAction(AskAction):
             if invite.remain_uses == 0:
                 invite.delete()
             group.members.append(user)
+            if len(user.groups) == 1:
+                user.fav_group_id = group.id
 
         AppManager.get_menu().go_to_url(user_id, f'group?group={group.id}')
 
@@ -264,7 +264,7 @@ class KickUserAction(AskAction):
 
         group.members.remove(u)
 
-        self.go_to_prev_page(user_id)
+        AppManager.get_menu().set_prev_state(user_id)
 
 
 class CreateTimetableAction(AskAction):
@@ -307,7 +307,7 @@ class CreateTimetableAction(AskAction):
         AppManager.get_db().session.add_all(lessons)
         AppManager.get_db().commit()
 
-        self.go_to_prev_page(user_id)
+        AppManager.get_menu().set_prev_state(user_id)
 
 
 class AddHomeworkAction(AskAction):
@@ -344,9 +344,12 @@ class AddHomeworkAction(AskAction):
         db.session.add(u)
         db.commit()
 
-        self.go_to_prev_page(message.from_user.id)
+        AppManager.get_menu().set_prev_state(message.from_user.id)
 
     def correct_data_handler(self, message: types.Message):
-        solution = AppManager.get_bot().copy_message(settings.MEDIA_STORAGE_TG_ID, message.from_user.id,
+        solution = AppManager.get_bot().copy_message(settings.MEDIA_STORAGE_TG_ID,
+                                                     message.from_user.id,
                                                      message.id).message_id
-        AppManager.get_db().session.add(models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution))
+        AppManager.get_db().session.add(
+                models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution,
+                                     author_id=message.from_user.id, created=date.today()))

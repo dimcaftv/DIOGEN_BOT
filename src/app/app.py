@@ -18,6 +18,7 @@ class App:
     def start(self):
         self.init_bot()
         self.bot.infinity_polling(skip_pending=True)
+        self.startup_actions()
 
     def init_bot(self):
         self.register_bot_handlers()
@@ -28,3 +29,6 @@ class App:
         callback_handlers.register_handlers(self.bot, settings.callbacks_handlers)
         filters.register_filters(self.bot, settings.bot_filters)
         commands.register_commands(self.bot, settings.commands_list)
+
+    def startup_actions(self):
+        pass

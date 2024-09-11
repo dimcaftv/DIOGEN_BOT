@@ -55,8 +55,10 @@ class GroupModel(AbstractModel):
     admin_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
 
     members: Mapped[list['UserModel']] = relationship(back_populates='groups', uselist=True, secondary="user_to_group")
-    invites: Mapped[list['GroupInviteModel']] = relationship(back_populates='group', uselist=True)
-    lessons: Mapped[list['LessonModel']] = relationship(back_populates='group', uselist=True)
+    invites: Mapped[list['GroupInviteModel']] = relationship(back_populates='group', uselist=True,
+                                                             cascade='save-update,merge,delete,delete-orphan')
+    lessons: Mapped[list['LessonModel']] = relationship(back_populates='group', uselist=True,
+                                                        cascade='save-update,merge,delete,delete-orphan')
 
 
 class UserToGroupModel(AbstractModel):
@@ -90,7 +92,8 @@ class LessonModel(AbstractModel):
     name: Mapped[str] = mapped_column(nullable=False)
     notes: Mapped[str] = mapped_column(nullable=True)
 
-    solutions: Mapped[list['SolutionModel']] = relationship(back_populates='lesson', uselist=True)
+    solutions: Mapped[list['SolutionModel']] = relationship(back_populates='lesson', uselist=True,
+                                                            cascade='save-update,merge,delete,delete-orphan')
 
 
 class SolutionModel(AbstractModel):
@@ -104,5 +107,5 @@ class SolutionModel(AbstractModel):
     msg_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
     author: Mapped['UserModel'] = relationship(back_populates='solutions', uselist=False)
-    author_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'))
+    author_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     created: Mapped[date] = mapped_column(Date)
