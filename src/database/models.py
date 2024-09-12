@@ -18,16 +18,20 @@ class AbstractModel:
         AppManager.get_db().delete(self)
 
     @classmethod
-    def get(cls, *pks) -> Self:
-        return AppManager.get_db().session.get(cls, tuple(pks))
+    def get(cls, *pks, session=None) -> Self:
+        if session is None:
+            session = AppManager.get_db().selecting_session
+        return session.get(cls, pks)
 
     @classmethod
-    def select(cls, *where):
-        return AppManager.get_db().exec(select(cls).where(*where))
+    def select(cls, *where, session=None):
+        if session is None:
+            return AppManager.get_db().exec(select(cls).where(*where))
+        return session.scalars(select(cls).where(*where))
 
     @classmethod
-    def delete_where(cls, *where):
-        AppManager.get_db().session.execute(delete(cls).where(*where))
+    def delete_where(cls, *where, session=None):
+        session.execute(delete(cls).where(*where))
 
 
 class UserModel(AbstractModel):
@@ -59,6 +63,9 @@ class GroupModel(AbstractModel):
                                                              cascade='save-update,merge,delete,delete-orphan')
     lessons: Mapped[list['LessonModel']] = relationship(back_populates='group', uselist=True,
                                                         cascade='save-update,merge,delete,delete-orphan')
+
+    def is_group_admin(self, user_id: int) -> bool:
+        return self.admin_id == user_id
 
 
 class UserToGroupModel(AbstractModel):

@@ -1,3 +1,5 @@
+import threading
+
 from telebot import TeleBot
 
 import settings
@@ -17,8 +19,10 @@ class App:
 
     def start(self):
         self.init_bot()
-        self.bot.infinity_polling(skip_pending=True)
         self.startup_actions()
+        self.start_comands_waiting()
+        self.bot.infinity_polling(skip_pending=True)
+        self.stop_actions()
 
     def init_bot(self):
         self.register_bot_handlers()
@@ -30,5 +34,24 @@ class App:
         filters.register_filters(self.bot, settings.bot_filters)
         commands.register_commands(self.bot, settings.commands_list)
 
+    def command_handler(self):
+        while True:
+            cmd = input('>>> ')
+            if cmd == 'stop':
+                self.bot.stop_bot()
+                break
+
+    def start_comands_waiting(self):
+        threading.Thread(target=self.command_handler).start()
+
+    def set_bot_status(self, status: bool):
+        opts = ['🔴', '🟢']
+        d = f"Статус: {opts[status]}\n\nНовости: @diogen_bot_news\nКод: https://github.com/dimcaftv/DIOGEN_BOT"
+        self.bot.set_my_short_description(d)
+
     def startup_actions(self):
-        pass
+        self.set_bot_status(True)
+
+    def stop_actions(self):
+        self.set_bot_status(False)
+        self.db.commit()

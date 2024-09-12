@@ -5,7 +5,7 @@ from menu.actions import (AddHomeworkAction, CopyPrevTimetableAction, CreateGrou
                           CreateTimetableAction, DeleteGroupAction, JoinGroupAction, KickUserAction, TransferAction,
                           ViewHomeworkAction)
 from menu.menu import AbsMenuPage, MenuItem
-from utils import filters, states, utils
+from utils import states, utils
 from utils.calendar import Week
 
 
@@ -50,7 +50,7 @@ class GroupPage(AbsMenuPage):
 
     def get_items(self) -> list[MenuItem]:
         self.group = models.GroupModel.get(self.query_data['group'])
-        is_admin = filters.is_group_admin(self.user.id, self.group.id)
+        is_admin = self.group.is_group_admin(self.user.id)
         items = ([
                      MenuItem('расписание', TransferAction('timetable', {'group': self.group.id})),
                      MenuItem('участники', TransferAction('users_list', {'group': self.group.id}))
@@ -76,7 +76,7 @@ class TimetablePage(AbsMenuPage):
         self.group = models.GroupModel.get(self.query_data['group'])
         self.week = Week.from_str(self.query_data['week']) if 'week' in self.query_data else Week.today()
 
-        is_admin = filters.is_group_admin(self.user.id, self.group.id)
+        is_admin = self.group.is_group_admin(self.user.id)
         items = [
                     MenuItem('<', TransferAction('timetable', {'group': self.group.id, 'week': str(self.week.prev())})),
                     MenuItem('>', TransferAction('timetable', {'group': self.group.id, 'week': str(self.week.next())}))
@@ -145,7 +145,7 @@ class UsersListPage(AbsMenuPage):
 
     def get_items(self) -> list[MenuItem]:
         self.group = models.GroupModel.get(self.query_data['group'])
-        is_admin = filters.is_group_admin(self.user.id, self.group.id)
+        is_admin = self.group.is_group_admin(self.user.id)
         items = ([MenuItem('кикнуть', KickUserAction(self.group.id))] * is_admin +
                  [MenuItem('назад', TransferAction('group', {'group': self.group.id}))])
         return items

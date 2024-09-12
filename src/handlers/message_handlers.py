@@ -8,7 +8,8 @@ from utils import utils
 
 
 def start_cmd_handler(message: types.Message, bot: TeleBot):
-    models.UserModel(id=message.from_user.id, username=message.from_user.username, menu_msg_id=message.id).save()
+    with AppManager.get_db().cnt_mng as s:
+        s.merge(models.UserModel(id=message.from_user.id, username=message.from_user.username, menu_msg_id=message.id))
     bot.send_message(message.chat.id, messages.start_cmd_text)
 
 
@@ -34,16 +35,10 @@ def back_cmd_handler(message: types.Message, bot: TeleBot):
     AppManager.get_menu().return_to_prev_page(user_id, message.id)
 
 
-def ask_data_wrong_handler(message: types.Message, bot: TeleBot):
+def asker_handler(message: types.Message, bot: TeleBot):
     menu = AppManager.get_menu()
     asker_url = models.UserModel.get(message.from_user.id).asker_url
-    menu.get_action(asker_url).wrong_data_handler(message)
-
-
-def ask_data_success_handler(message: types.Message, bot: TeleBot):
-    menu = AppManager.get_menu()
-    asker_url = models.UserModel.get(message.from_user.id).asker_url
-    menu.get_action(asker_url).correct_data_handler(message)
+    menu.get_action(asker_url).message_handler(message)
 
 
 def register_handlers(bot: TeleBot, cmd_handlers, kwargs_handlers):

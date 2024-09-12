@@ -51,7 +51,9 @@ class DeleteGroupAction(Action):
         self.group_id = int(full_data)
 
     def do(self, query: types.CallbackQuery):
-        models.GroupModel.get(self.group_id).delete()
+        with AppManager.get_db().cnt_mng as s:
+            g = models.GroupModel.get(self.group_id, session=s)
+            s.delete(g)
         AppManager.get_menu().go_to_url(query.from_user.id, 'grouplist')
 
     def get_url_params(self):
@@ -77,13 +79,14 @@ class CopyPrevTimetableAction(Action):
     def do(self, query: types.CallbackQuery):
         pweek = self.week.prev()
         lessons = []
-        for d1, d2 in zip(pweek, self.week):
-            models.LessonModel.delete_where(models.LessonModel.date == d2, models.LessonModel.group_id == self.group_id)
-            for l in models.LessonModel.select(models.LessonModel.date == d1,
-                                               models.LessonModel.group_id == self.group_id).all():
-                lessons.append(models.LessonModel(date=d2, group_id=self.group_id, name=l.name))
-        AppManager.get_db().session.add_all(lessons)
-        AppManager.get_db().commit()
+        with AppManager.get_db().cnt_mng as s:
+            for d1, d2 in zip(pweek, self.week):
+                models.LessonModel.delete_where(models.LessonModel.date == d2,
+                                                models.LessonModel.group_id == self.group_id, session=s)
+                for l in models.LessonModel.select(models.LessonModel.date == d1,
+                                                   models.LessonModel.group_id == self.group_id).all():
+                    lessons.append(models.LessonModel(date=d2, group_id=self.group_id, name=l.name))
+            s.add_all(lessons)
 
 
 class ViewHomeworkAction(Action):
@@ -99,9 +102,10 @@ class ViewHomeworkAction(Action):
     def do(self, query: types.CallbackQuery):
         solutions = [s.msg_id for s in
                      models.SolutionModel.select(models.SolutionModel.lesson_id == self.lesson_id).all()]
-        if not solutions:
-            return
         bot = AppManager.get_bot()
+        if not solutions:
+            bot.answer_callback_query(query.id, 'На этот урок ничего нет', True)
+            return
         bot.copy_messages(query.from_user.id, settings.MEDIA_STORAGE_TG_ID, solutions)
         bot.send_message(query.from_user.id, 'Назад - /back')
 
@@ -133,6 +137,10 @@ class AskAction(Action):
     def process_data(self, user_id, data):
         raise NotImplementedError
 
+    def message_handler(self, message: types.Message):
+        funcs = [self.wrong_data_handler, self.correct_data_handler]
+        funcs[self.check(message)](message)
+
     def wrong_data_handler(self, message: types.Message):
         AppManager.get_bot().send_message(message.chat.id, self.wrong_text)
 
@@ -163,12 +171,12 @@ class CreateGroupAction(AskAction):
         return message.text
 
     def process_data(self, user_id, data):
-        u = models.UserModel.get(user_id)
-        g = models.GroupModel(name=data, admin=u, members=[u])
-        if len(u.groups) == 1:
-            u.fav_group_id = g.id
-        AppManager.get_db().session.add_all([g, u])
-        AppManager.get_db().commit()
+        with AppManager.get_db().cnt_mng as s:
+            u = models.UserModel.get(user_id, session=s)
+            g = models.GroupModel(name=data, admin=u, members=[u])
+            if len(u.groups) == 1:
+                u.fav_group_id = g.id
+            s.add_all([g, u])
         AppManager.get_menu().go_to_last_url(user_id)
 
 
@@ -195,7 +203,8 @@ class CreateInviteAction(AskAction):
         return int(message.text)
 
     def process_data(self, user_id, n):
-        models.GroupInviteModel(link=utils.generate_invite_link(), group_id=self.group_id, remain_uses=n).save()
+        with AppManager.get_db().cnt_mng as s:
+            s.add(models.GroupInviteModel(link=utils.generate_invite_link(), group_id=self.group_id, remain_uses=n))
 
         AppManager.get_menu().set_prev_state(user_id)
 
@@ -218,18 +227,20 @@ class JoinGroupAction(AskAction):
         return message.text.lower()
 
     def process_data(self, user_id, data):
-        invite = models.GroupInviteModel.get(data)
-        group = invite.group
-        user = models.UserModel.get(user_id)
-        if user not in group.members:
-            invite.remain_uses -= 1
-            if invite.remain_uses == 0:
-                invite.delete()
-            group.members.append(user)
-            if len(user.groups) == 1:
-                user.fav_group_id = group.id
+        with AppManager.get_db().cnt_mng as s:
+            invite = models.GroupInviteModel.get(data, session=s)
+            user = models.UserModel.get(user_id, session=s)
+            group = invite.group
+            if user not in group.members:
+                invite.remain_uses -= 1
+                if invite.remain_uses == 0:
+                    s.delete(invite)
+                group.members.append(user)
+                if len(user.groups) == 1:
+                    user.fav_group_id = group.id
+            gid = group.id
 
-        AppManager.get_menu().go_to_url(user_id, f'group?group={group.id}')
+        AppManager.get_menu().go_to_url(user_id, f'group?group={gid}')
 
 
 class KickUserAction(AskAction):
@@ -251,18 +262,14 @@ class KickUserAction(AskAction):
 
     def check(self, message: types.Message) -> bool:
         users = models.GroupModel.get(self.group_id).members
-        return (message.text != message.from_user.first_name and
-                message.text in [utils.get_tg_user_from_model(u).first_name for u in users])
+        return (message.text != message.from_user.username and
+                message.text in [u.username for u in users])
 
     def process_data(self, user_id, data):
-        group = models.GroupModel.get(self.group_id)
-
-        u = 0
-        for u in group.members:
-            if utils.get_tg_user_from_model(u).first_name == data:
-                break
-
-        group.members.remove(u)
+        with AppManager.get_db().cnt_mng as s:
+            group = models.GroupModel.get(self.group_id, session=s)
+            u = models.UserModel.select(models.UserModel.username == data, session=s).first()
+            group.members.remove(u)
 
         AppManager.get_menu().set_prev_state(user_id)
 
@@ -298,14 +305,15 @@ class CreateTimetableAction(AskAction):
         timetable = [p.strip().split() for p in data.split('\n')]
 
         lessons = []
-        for d, t in zip(self.week, timetable):
-            models.LessonModel.delete_where(models.LessonModel.date == d, models.LessonModel.group_id == self.group_id)
-            if t[0] == '-':
-                continue
-            for l in t:
-                lessons.append(models.LessonModel(date=d, group_id=self.group_id, name=l))
-        AppManager.get_db().session.add_all(lessons)
-        AppManager.get_db().commit()
+        with AppManager.get_db().cnt_mng as s:
+            for d, t in zip(self.week, timetable):
+                models.LessonModel.delete_where(models.LessonModel.date == d,
+                                                models.LessonModel.group_id == self.group_id, session=s)
+                if t[0] == '-':
+                    continue
+                for l in t:
+                    lessons.append(models.LessonModel(date=d, group_id=self.group_id, name=l))
+            s.add_all(lessons)
 
         AppManager.get_menu().set_prev_state(user_id)
 
@@ -316,7 +324,7 @@ class AddHomeworkAction(AskAction):
 
     def __init__(self, full_data):
         super().__init__(
-                'Отправь сюда сколько можешь сообщений дз и напиши /stop',
+                'Отправь сюда сколько можешь сообщений дз и напиши /stop\nТолько не скидывай несколько фотографий одним сообщением, я еще это не пофиксил',
                 'Сохраняю...'
         )
         self.lesson_id = int(full_data)
@@ -336,13 +344,9 @@ class AddHomeworkAction(AskAction):
     def wrong_data_handler(self, message: types.Message):
         super().wrong_data_handler(message)
         utils.delete_all_after_menu(message.from_user.id, message.id + 1)
-
-        u = models.UserModel.get(message.from_user.id)
-        u.asker_url = None
-
-        db = AppManager.get_db()
-        db.session.add(u)
-        db.commit()
+        with AppManager.get_db().cnt_mng as s:
+            u = models.UserModel.get(message.from_user.id, session=s)
+            u.asker_url = None
 
         AppManager.get_menu().set_prev_state(message.from_user.id)
 
@@ -350,6 +354,6 @@ class AddHomeworkAction(AskAction):
         solution = AppManager.get_bot().copy_message(settings.MEDIA_STORAGE_TG_ID,
                                                      message.from_user.id,
                                                      message.id).message_id
-        AppManager.get_db().session.add(
-                models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution,
-                                     author_id=message.from_user.id, created=date.today()))
+        with AppManager.get_db().cnt_mng as s:
+            s.add(models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution,
+                                       author_id=message.from_user.id, created=date.today()))
