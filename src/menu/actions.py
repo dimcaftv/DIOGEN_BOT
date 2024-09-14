@@ -52,8 +52,7 @@ class DeleteGroupAction(Action):
 
     def do(self, query: types.CallbackQuery):
         with AppManager.get_db().cnt_mng as s:
-            g = models.GroupModel.get(self.group_id, session=s)
-            s.delete(g)
+            s.delete(models.GroupModel.get(self.group_id, session=s))
         AppManager.get_menu().go_to_url(query.from_user.id, 'grouplist')
 
     def get_url_params(self):
@@ -100,8 +99,7 @@ class ViewHomeworkAction(Action):
         return str(self.lesson_id)
 
     def do(self, query: types.CallbackQuery):
-        solutions = [s.msg_id for s in
-                     models.SolutionModel.select(models.SolutionModel.lesson_id == self.lesson_id).all()]
+        solutions = [s.msg_id for s in models.LessonModel.get(self.lesson_id).solutions]
         bot = AppManager.get_bot()
         if not solutions:
             bot.answer_callback_query(query.id, 'На этот урок ничего нет', True)
@@ -129,17 +127,14 @@ class AskAction(Action):
         bot.send_message(query.message.chat.id, self.ask_text)
         bot.set_state(query.from_user.id, states.ActionStates.ASK)
 
-        u = models.UserModel.get(query.from_user.id)
-        u.asker_url = self.get_url()
-        u.save()
+        models.UserDataclass.set_by_key(query.from_user.id, 'asker_url', self.get_url())
 
     @abc.abstractmethod
     def process_data(self, user_id, data):
         raise NotImplementedError
 
     def message_handler(self, message: types.Message):
-        funcs = [self.wrong_data_handler, self.correct_data_handler]
-        funcs[self.check(message)](message)
+        [self.wrong_data_handler, self.correct_data_handler][self.check(message)](message)
 
     def wrong_data_handler(self, message: types.Message):
         AppManager.get_bot().send_message(message.chat.id, self.wrong_text)
@@ -148,11 +143,9 @@ class AskAction(Action):
         user_id = message.from_user.id
         utils.delete_all_after_menu(user_id, message.id)
 
-        u = models.UserModel.get(user_id)
-        u.asker_url = None
-        u.save()
+        models.UserDataclass.set_by_key(user_id, 'asker_url', None)
 
-        self.process_data(message.from_user.id, self.extract_data(message))
+        self.process_data(user_id, self.extract_data(message))
 
 
 class CreateGroupAction(AskAction):
@@ -173,10 +166,12 @@ class CreateGroupAction(AskAction):
     def process_data(self, user_id, data):
         with AppManager.get_db().cnt_mng as s:
             u = models.UserModel.get(user_id, session=s)
-            g = models.GroupModel(name=data, admin=u, members=[u])
+            g = models.GroupModel(name=data)
+            s.add_all([g, u])
+            g.admin = u
+            g.members.append(u)
             if len(u.groups) == 1:
                 u.fav_group_id = g.id
-            s.add_all([g, u])
         AppManager.get_menu().go_to_last_url(user_id)
 
 
@@ -195,7 +190,7 @@ class CreateInviteAction(AskAction):
         return str(self.group_id)
 
     def check(self, message: types.Message) -> bool:
-        if not (message.text and message.text.isdigit()):
+        if not (message.text and message.text.isdecimal()):
             return False
         return int(message.text) > 0
 
@@ -343,12 +338,12 @@ class AddHomeworkAction(AskAction):
 
     def wrong_data_handler(self, message: types.Message):
         super().wrong_data_handler(message)
-        utils.delete_all_after_menu(message.from_user.id, message.id + 1)
-        with AppManager.get_db().cnt_mng as s:
-            u = models.UserModel.get(message.from_user.id, session=s)
-            u.asker_url = None
+        user_id = message.from_user.id
+        utils.delete_all_after_menu(user_id, message.id + 1)
 
-        AppManager.get_menu().set_prev_state(message.from_user.id)
+        models.UserDataclass.set_by_key(user_id, 'asker_url', None)
+
+        AppManager.get_menu().set_prev_state(user_id)
 
     def correct_data_handler(self, message: types.Message):
         solution = AppManager.get_bot().copy_message(settings.MEDIA_STORAGE_TG_ID,

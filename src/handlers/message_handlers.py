@@ -9,7 +9,7 @@ from utils import utils
 
 def start_cmd_handler(message: types.Message, bot: TeleBot):
     with AppManager.get_db().cnt_mng as s:
-        s.merge(models.UserModel(id=message.from_user.id, username=message.from_user.username, menu_msg_id=message.id))
+        s.merge(models.UserModel(id=message.from_user.id, username=message.from_user.username))
     bot.send_message(message.chat.id, messages.start_cmd_text)
 
 
@@ -18,16 +18,22 @@ def help_cmd_handler(message: types.Message, bot: TeleBot):
 
 
 def menu_cmd_handler(message: types.Message, bot: TeleBot):
-    u = models.UserModel.get(message.from_user.id)
-    utils.delete_messages_range(u.id, u.menu_msg_id, message.id)
+    user_id = message.from_user.id
+    u = models.UserModel.get(user_id)
+    mmid = models.UserDataclass.get_by_key(user_id, 'menu_msg_id')
+
+    utils.delete_messages_range(user_id, mmid, message.id)
 
     ans = bot.send_message(message.chat.id, 'Загрузка...')
 
-    u.menu_msg_id = ans.id
+    mmid = ans.id
+    models.UserDataclass.set_by_key(user_id, 'menu_msg_id', mmid)
+
     url = 'main'
     if u.fav_group_id:
         url = TransferAction('group', {'group': u.fav_group_id}).url
-    AppManager.get_menu().go_to_url(message.from_user.id, url)
+
+    AppManager.get_menu().go_to_url(user_id, url)
 
 
 def back_cmd_handler(message: types.Message, bot: TeleBot):
@@ -37,7 +43,7 @@ def back_cmd_handler(message: types.Message, bot: TeleBot):
 
 def asker_handler(message: types.Message, bot: TeleBot):
     menu = AppManager.get_menu()
-    asker_url = models.UserModel.get(message.from_user.id).asker_url
+    asker_url = AppManager.get_db().dynamic_user_data.get_by_key(message.from_user.id, 'asker_url')
     menu.get_action(asker_url).message_handler(message)
 
 

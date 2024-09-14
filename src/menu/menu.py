@@ -1,7 +1,8 @@
 import abc
+from typing import Iterable
 from urllib.parse import parse_qs, urlparse
 
-from telebot import util
+from telebot import types
 
 from app.app_manager import AppManager
 from database import models
@@ -10,9 +11,27 @@ from utils import states, utils
 
 
 class MenuItem:
-    def __init__(self, text: str, action: actions.Action):
+    @classmethod
+    def empty(cls):
+        return cls(' ', None)
+
+    def __init__(self, text: str, action: actions.Action, admin_only=False):
         self.text = text
         self.action = action
+        self.admin_only = admin_only
+
+
+class KeyboardLayout:
+    def __init__(self, *rows: Iterable[MenuItem] | MenuItem, is_admin=False, row_width=2):
+        self.ik = types.InlineKeyboardMarkup(row_width=row_width)
+        for r in rows:
+            if not isinstance(r, Iterable):
+                r = r,
+
+            r = [types.InlineKeyboardButton(text=b.text,
+                                            callback_data=('-' if b.action is None else b.action.get_url()))
+                 for b in r if b.admin_only <= is_admin]
+            self.ik.add(*r)
 
 
 class AbsMenuPage(abc.ABC):
@@ -20,11 +39,10 @@ class AbsMenuPage(abc.ABC):
     urlpath: str = None
 
     def __init__(self, user_id: int, query: str, data: dict = None):
-        self.user = models.UserModel.get(user_id)
-        self.tg_user = utils.get_tg_user_from_model(self.user)
+        self.tg_user = utils.get_tg_user(user_id)
         self.query_data = self.extract_data(query)
         self.data = data if data else {}
-        self.items = {v.action.get_url(): v for v in self.get_items()}
+        self.items = self.get_items()
 
     def extract_data(self, query: str):
         res = {}
@@ -36,14 +54,8 @@ class AbsMenuPage(abc.ABC):
             res[k] = v
         return res
 
-    def get_action(self, callback_data: str):
-        return self.get_item_from_data(callback_data).action
-
-    def get_item_from_data(self, callback_data) -> MenuItem:
-        return self.items[callback_data]
-
     @abc.abstractmethod
-    def get_items(self) -> list[MenuItem]:
+    def get_items(self) -> KeyboardLayout:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -51,7 +63,7 @@ class AbsMenuPage(abc.ABC):
         raise NotImplementedError
 
     def get_inline_kb(self):
-        return util.quick_markup({v.text: {'callback_data': k} for k, v in self.items.items()})
+        return self.items.ik
 
     def get_message_kw(self):
         return {'text': self.get_page_text(), 'reply_markup': self.get_inline_kb()}
@@ -65,14 +77,13 @@ class Menu:
 
     def update_to_page(self, page: AbsMenuPage, url: str):
         bot = AppManager.get_bot()
-        menu_id = page.user.menu_msg_id
 
-        u = page.user
-        u.page_url = url
-        u.save()
+        user_id = page.tg_user.id
+        menu_id = models.UserDataclass.get_by_key(user_id, 'menu_msg_id')
+        models.UserDataclass.set_by_key(user_id, 'page_url', url)
+        bot.set_state(user_id, page.state)
 
-        bot.set_state(page.user.id, page.state)
-        bot.edit_message_text(chat_id=page.user.id,
+        bot.edit_message_text(chat_id=user_id,
                               message_id=menu_id,
                               **page.get_message_kw())
 
@@ -98,7 +109,7 @@ class Menu:
         self.go_to_url(user_id, self.get_last_url(user_id))
 
     def get_last_url(self, user_id: int):
-        return models.UserModel.get(user_id).page_url
+        return models.UserDataclass.get_by_key(user_id, 'page_url')
 
     def set_prev_state(self, user_id: int):
         state = self.get_page_class(urlparse(self.get_last_url(user_id)).path).state

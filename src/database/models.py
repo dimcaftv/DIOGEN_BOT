@@ -1,3 +1,4 @@
+import dataclasses
 from datetime import date
 from typing import Self
 
@@ -5,6 +6,26 @@ from sqlalchemy import BigInteger, Date, ForeignKey, delete, select
 from sqlalchemy.orm import Mapped, as_declarative, mapped_column, relationship
 
 from app.app_manager import AppManager
+from utils import utils
+
+
+@dataclasses.dataclass
+class UserDataclass:
+    page_url: str
+    asker_url: str
+    menu_msg_id: int
+
+    @classmethod
+    def get_keys(cls):
+        return list(cls.__dataclass_fields__.keys())
+
+    @staticmethod
+    def get_by_key(user_id: int, key: str):
+        return AppManager.get_db().dynamic_user_data.get_by_key(user_id, key)
+
+    @staticmethod
+    def set_by_key(user_id: int, key: str, val):
+        return AppManager.get_db().dynamic_user_data.set_by_key(user_id, key, val)
 
 
 @as_declarative()
@@ -39,14 +60,17 @@ class UserModel(AbstractModel):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     username: Mapped[str] = mapped_column()
-    page_url: Mapped[str] = mapped_column(default='main')
-    asker_url: Mapped[str] = mapped_column(nullable=True)
-    menu_msg_id: Mapped[int] = mapped_column(BigInteger)
+    # page_url: Mapped[str] = mapped_column(default='main')
+    # asker_url: Mapped[str] = mapped_column(nullable=True)
+    # menu_msg_id: Mapped[int] = mapped_column(BigInteger)
     fav_group_id: Mapped[int] = mapped_column(nullable=True)
 
     admin_in: Mapped[list['GroupModel']] = relationship(back_populates='admin', uselist=True)
     groups: Mapped[list['GroupModel']] = relationship(back_populates='members', uselist=True, secondary="user_to_group")
     solutions: Mapped[list['SolutionModel']] = relationship(back_populates='author', uselist=True)
+
+    def get_tg_user(self):
+        return utils.get_tg_user(self.id)
 
 
 class GroupModel(AbstractModel):

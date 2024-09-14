@@ -14,7 +14,7 @@ class App:
     def __init__(self):
         self.bot = TeleBot(settings.BOT_TOKEN)
         self.menu = menu.Menu(settings.pages_list, settings.actions_list)
-        self.db = database.DatabaseInterface()
+        self.db = database.DatabaseInterface(self.bot.current_states)
         self.app_manager = AppManager(self)
 
     def start(self):
