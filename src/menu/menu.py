@@ -75,17 +75,22 @@ class Menu:
         self.pages = {p.urlpath: p for p in pages} if pages else {}
         self.actions = {a.key: a for a in actions_list} if actions_list else {}
 
-    def update_to_page(self, page: AbsMenuPage, url: str):
-        bot = AppManager.get_bot()
-
+    def update_to_page(self, page: AbsMenuPage):
         user_id = page.tg_user.id
-        menu_id = models.UserDataclass.get_by_key(user_id, 'menu_msg_id')
-        models.UserDataclass.set_by_key(user_id, 'page_url', url)
-        bot.set_state(user_id, page.state)
+        AppManager.get_bot().set_state(user_id, page.state)
+        self.edit_menu_msg(user_id, **page.get_message_kw())
 
-        bot.edit_message_text(chat_id=user_id,
-                              message_id=menu_id,
-                              **page.get_message_kw())
+    def edit_menu_msg(self, user_id, text, reply_markup=None):
+        menu_id = models.UserDataclass.get_by_key(user_id, 'menu_msg_id')
+        self.edit_msg(user_id, menu_id, text, reply_markup)
+
+    def edit_msg(self, user_id, msg_id, text, reply_markup=None):
+        AppManager.get_bot().edit_message_text(
+                chat_id=user_id,
+                message_id=msg_id,
+                text=text,
+                reply_markup=reply_markup
+        )
 
     def get_action(self, callback_data: str) -> actions.Action:
         part = callback_data.partition(':')
@@ -103,7 +108,8 @@ class Menu:
 
     def go_to_url(self, user_id: int, url: str, data: dict = None):
         page = self.get_page(user_id, url, data)
-        self.update_to_page(page, url)
+        models.UserDataclass.set_by_key(user_id, 'page_url', url)
+        self.update_to_page(page)
 
     def go_to_last_url(self, user_id: int):
         self.go_to_url(user_id, self.get_last_url(user_id))

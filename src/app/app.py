@@ -1,7 +1,6 @@
-import threading
-
 from telebot import TeleBot
 
+import messages.messages
 import settings
 from app.app_manager import AppManager
 from database import database
@@ -14,19 +13,18 @@ class App:
     def __init__(self):
         self.bot = TeleBot(settings.BOT_TOKEN)
         self.menu = menu.Menu(settings.pages_list, settings.actions_list)
-        self.db = database.DatabaseInterface(self.bot.current_states)
+        self.db = database.DatabaseInterface(settings.TMP_USER_DATA_PATH)
         self.app_manager = AppManager(self)
 
     def start(self):
         self.init_bot()
         self.startup_actions()
-        self.start_comands_waiting()
         self.bot.infinity_polling(skip_pending=True)
         self.stop_actions()
 
     def init_bot(self):
         self.register_bot_handlers()
-        self.bot.enable_saving_states('../.state-save/states.pkl')
+        self.bot.current_states = self.db.dynamic_user_data.storage.storage
 
     def register_bot_handlers(self):
         message_handlers.register_handlers(self.bot, settings.cmd_handlers, settings.kwargs_handlers)
@@ -34,20 +32,8 @@ class App:
         filters.register_filters(self.bot, settings.bot_filters)
         commands.register_commands(self.bot, settings.commands_list)
 
-    def command_handler(self):
-        while True:
-            cmd = input('>>> ')
-            if cmd == 'stop':
-                self.bot.stop_bot()
-                break
-
-    def start_comands_waiting(self):
-        threading.Thread(target=self.command_handler).start()
-
     def set_bot_status(self, status: bool):
-        opts = ['🔴', '🟢']
-        d = f"Статус: {opts[status]}\n\nНовости: @diogen_bot_news\nКод: https://github.com/dimcaftv/DIOGEN_BOT"
-        self.bot.set_my_short_description(d)
+        self.bot.set_my_short_description(messages.messages.get_status_text(status))
 
     def startup_actions(self):
         self.set_bot_status(True)

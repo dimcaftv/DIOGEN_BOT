@@ -10,6 +10,8 @@ from utils import utils
 def start_cmd_handler(message: types.Message, bot: TeleBot):
     with AppManager.get_db().cnt_mng as s:
         s.merge(models.UserModel(id=message.from_user.id, username=message.from_user.username))
+
+    AppManager.get_db().dynamic_user_data.storage.set_default_state(message.from_user.id)
     bot.send_message(message.chat.id, messages.start_cmd_text)
 
 

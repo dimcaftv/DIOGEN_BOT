@@ -11,17 +11,20 @@ from utils import utils
 
 @dataclasses.dataclass
 class UserDataclass:
-    page_url: str
-    asker_url: str
-    menu_msg_id: int
+    page_url: str = 'main'
+    asker_url: str = ''
+    menu_msg_id: int = 0
 
     @classmethod
     def get_keys(cls):
         return list(cls.__dataclass_fields__.keys())
 
-    @staticmethod
-    def get_by_key(user_id: int, key: str):
-        return AppManager.get_db().dynamic_user_data.get_by_key(user_id, key)
+    @classmethod
+    def get_by_key(cls, user_id: int, key: str):
+        res = AppManager.get_db().dynamic_user_data.get_by_key(user_id, key)
+        if res is None:
+            res = cls.__dataclass_fields__.get(key).default
+        return res
 
     @staticmethod
     def set_by_key(user_id: int, key: str, val):
@@ -60,9 +63,6 @@ class UserModel(AbstractModel):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     username: Mapped[str] = mapped_column()
-    # page_url: Mapped[str] = mapped_column(default='main')
-    # asker_url: Mapped[str] = mapped_column(nullable=True)
-    # menu_msg_id: Mapped[int] = mapped_column(BigInteger)
     fav_group_id: Mapped[int] = mapped_column(nullable=True)
 
     admin_in: Mapped[list['GroupModel']] = relationship(back_populates='admin', uselist=True)

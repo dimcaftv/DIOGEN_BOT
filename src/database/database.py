@@ -2,7 +2,7 @@ from dataclasses import asdict
 
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
-from telebot import StateStorageBase
+from telebot import StatePickleStorage, StateStorageBase
 
 import settings
 from . import models
@@ -21,11 +21,13 @@ class PrivateChatStorageAdapter:
             data.setdefault('menu_msg_id', 0)
 
     def set_data(self, user_id, key, value):
-        self.set_default_state(user_id)
-        self.storage.set_data(user_id, user_id, key, value)
+        if self.get_data(user_id, key) != value:
+            self.storage.set_data(user_id, user_id, key, value)
 
-    def get_data(self, user_id):
-        self.set_default_state(user_id)
+    def get_data(self, user_id, key):
+        return self.get_user_data(user_id).get(key)
+
+    def get_user_data(self, user_id):
         return self.storage.get_data(user_id, user_id)
 
     def get_cnt_mng_data(self, user_id):
@@ -37,7 +39,7 @@ class UserDataManager:
         self.storage = PrivateChatStorageAdapter(storage)
 
     def get_user(self, user_id: int):
-        data = self.storage.get_data(user_id)
+        data = self.storage.get_user_data(user_id)
         return models.UserDataclass(*[data[k] for k in models.UserDataclass.get_keys()])
 
     def save_user(self, user_id: int, user: models.UserDataclass):
@@ -45,7 +47,7 @@ class UserDataManager:
             data.update(asdict(user))
 
     def get_by_key(self, user_id: int, key: str):
-        return self.storage.get_data(user_id)[key]
+        return self.storage.get_data(user_id, key)
 
     def set_by_key(self, user_id: int, key: str, val):
         self.storage.set_data(user_id, key, val)
@@ -64,9 +66,9 @@ class SQLDatabaseManager:
 
 
 class DatabaseInterface:
-    def __init__(self, state_storage):
+    def __init__(self, storage_path: str):
         self.db = SQLDatabaseManager()
-        self.dynamic_user_data = UserDataManager(state_storage)
+        self.dynamic_user_data = UserDataManager(StatePickleStorage(storage_path))
 
     @property
     def selecting_session(self):

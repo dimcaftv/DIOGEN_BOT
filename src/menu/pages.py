@@ -3,7 +3,7 @@ from datetime import date
 from database import models
 from menu.actions import (AddHomeworkAction, CopyPrevTimetableAction, CreateGroupAction, CreateInviteAction,
                           CreateTimetableAction, DeleteGroupAction, JoinGroupAction, KickUserAction, TransferAction,
-                          ViewHomeworkAction)
+                          ViewHomeworkAction, ViewRecentHomeworkAction)
 from menu.menu import AbsMenuPage, KeyboardLayout, MenuItem
 from utils import states
 from utils.calendar import Week
@@ -33,10 +33,10 @@ class GroupListPage(AbsMenuPage):
                 (MenuItem(g.name, TransferAction('group', {'group': g.id}))
                  for g in self.groups),
                 (
-                    MenuItem('создать', CreateGroupAction()),
-                    MenuItem('присоединиться', JoinGroupAction())
+                    MenuItem('💾 создать', CreateGroupAction()),
+                    MenuItem('🔍 присоединиться', JoinGroupAction())
                 ),
-                MenuItem('назад', TransferAction('main'))
+                MenuItem('◀ назад', TransferAction('main'))
         )
 
     def get_page_text(self) -> str:
@@ -54,15 +54,16 @@ class GroupPage(AbsMenuPage):
 
         return KeyboardLayout(
                 (
-                    MenuItem('расписание', TransferAction('timetable', {'group': group_id})),
-                    MenuItem('участники', TransferAction('users_list', {'group': group_id}))
+                    MenuItem('📆 расписание', TransferAction('timetable', {'group': group_id})),
+                    MenuItem('🚹 участники', TransferAction('users_list', {'group': group_id}))
                 ),
+                MenuItem('💥 ответы на сегодня-завтра 💥', ViewRecentHomeworkAction(group_id)),
                 (
-                    MenuItem('создать приглашение', CreateInviteAction(group_id), True),
-                    MenuItem('Активные приглашения', TransferAction('active_invites', {'group': group_id}), True),
+                    MenuItem('💾 создать приглашение', CreateInviteAction(group_id), True),
+                    MenuItem('🎟 Активные приглашения', TransferAction('active_invites', {'group': group_id}), True),
                 ),
-                MenuItem('удалить', DeleteGroupAction(group_id), True),
-                MenuItem('назад', TransferAction('grouplist')),
+                MenuItem('❌ удалить', DeleteGroupAction(group_id), True),
+                MenuItem('◀ назад', TransferAction('grouplist')),
                 is_admin=is_admin
         )
 
@@ -83,16 +84,16 @@ class TimetablePage(AbsMenuPage):
 
         return KeyboardLayout(
                 (
-                    MenuItem('<', TransferAction('timetable', {'group': group_id, 'week': str(self.week.prev())})),
-                    MenuItem('>', TransferAction('timetable', {'group': group_id, 'week': str(self.week.next())}))
+                    MenuItem('◀', TransferAction('timetable', {'group': group_id, 'week': str(self.week.prev())})),
+                    MenuItem('▶', TransferAction('timetable', {'group': group_id, 'week': str(self.week.next())}))
                 ),
                 (MenuItem(Week.standart_day_format(d),
                           TransferAction('daypage', {'group': group_id, 'date': str(d)}))
                  for d in self.week),
                 MenuItem.empty(),
-                MenuItem('добавить на эту неделю', CreateTimetableAction(group_id, self.week), True),
-                MenuItem('копировать с прошлой недели', CopyPrevTimetableAction(group_id, self.week), True),
-                MenuItem('назад', TransferAction('group', {'group': group_id})),
+                MenuItem('💾 добавить на эту неделю', CreateTimetableAction(group_id, self.week), True),
+                MenuItem('🔄 копировать с прошлой недели', CopyPrevTimetableAction(group_id, self.week), True),
+                MenuItem('◀ назад', TransferAction('group', {'group': group_id})),
                 is_admin=is_admin
         )
 
@@ -112,10 +113,11 @@ class DayPage(AbsMenuPage):
                                             models.LessonModel.group_id == self.group.id).all()
 
         return KeyboardLayout(
-                (MenuItem(i.name, TransferAction('lesson', {'group': self.group.id, 'lesson_id': i.id}))
+                (MenuItem(i.name + ' ✅' * bool(i.solutions),
+                          TransferAction('lesson', {'group': self.group.id, 'lesson_id': i.id}))
                  for i in lessons),
                 MenuItem.empty(),
-                MenuItem('назад',
+                MenuItem('◀ назад',
                          TransferAction('timetable',
                                         {'group': self.group.id, 'week': str(Week.from_day(self.date))}))
         )
@@ -133,10 +135,10 @@ class LessonPage(AbsMenuPage):
 
         return KeyboardLayout(
                 (
-                    MenuItem('посмотреть', ViewHomeworkAction(self.lesson.id)),
-                    MenuItem('добавить', AddHomeworkAction(self.lesson.id))
+                    MenuItem('🔍 посмотреть', ViewHomeworkAction(self.lesson.id)),
+                    MenuItem('💾 добавить', AddHomeworkAction(self.lesson.id))
                 ),
-                MenuItem('назад',
+                MenuItem('◀ назад',
                          TransferAction('daypage',
                                         {'group': self.lesson.group_id, 'date': str(self.lesson.date)}))
         )
@@ -155,8 +157,8 @@ class UsersListPage(AbsMenuPage):
         is_admin = self.group.is_group_admin(self.tg_user.id)
 
         return KeyboardLayout(
-                MenuItem('кикнуть', KickUserAction(self.group.id), True),
-                MenuItem('назад', TransferAction('group', {'group': self.group.id})),
+                MenuItem('☠ кикнуть', KickUserAction(self.group.id), True),
+                MenuItem('◀ назад', TransferAction('group', {'group': self.group.id})),
                 is_admin=is_admin
         )
 
@@ -172,7 +174,7 @@ class ActiveInvitesPage(AbsMenuPage):
     def get_items(self) -> list[MenuItem]:
         self.group = models.GroupModel.get(self.query_data['group'])
         return KeyboardLayout(
-                MenuItem('назад', TransferAction('group', {'group': self.group.id}))
+                MenuItem('◀ назад', TransferAction('group', {'group': self.group.id}))
         )
 
     def get_page_text(self) -> str:

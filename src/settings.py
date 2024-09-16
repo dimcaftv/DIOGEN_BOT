@@ -1,16 +1,20 @@
 import os
 import typing
 
+import dotenv
 from telebot import custom_filters, types
 
 from handlers import callback_handlers, message_handlers
 from menu import actions, pages
 from utils import states
 
-DEBUG = True
+dotenv.load_dotenv('../.env')
+
+DEBUG = os.getenv('DEBUG') == '1'
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 DB_FULL_PATH = os.getenv('DB_PATH')
+TMP_USER_DATA_PATH = os.getenv('TMP_USER_DATA_PATH')
 
 MEDIA_STORAGE_TG_ID = os.getenv('MEDIA_STORAGE_ID')
 
@@ -33,7 +37,7 @@ commands_list = [
     types.BotCommand('start', 'запуск бота'),
     types.BotCommand('help', 'показать помощь'),
     types.BotCommand('menu', 'открыть главное меню'),
-    types.BotCommand('back', 'отменить текущее действие')
+    types.BotCommand('back', 'отменить текущее действие или удалить лишние сообщения')
 ]
 
 bot_filters = [
@@ -61,5 +65,6 @@ actions_list = [
     actions.CreateTimetableAction,
     actions.CopyPrevTimetableAction,
     actions.ViewHomeworkAction,
-    actions.AddHomeworkAction
+    actions.AddHomeworkAction,
+    actions.ViewRecentHomeworkAction
 ]

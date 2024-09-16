@@ -6,6 +6,7 @@ from database import models
 
 def main_callback(query: types.CallbackQuery, bot: TeleBot):
     data, user_id = query.data, query.from_user.id
+
     models.UserDataclass.set_by_key(user_id, 'menu_msg_id', query.message.id)
     if data == '-':
         bot.answer_callback_query(query.id)

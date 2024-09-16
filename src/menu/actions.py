@@ -1,7 +1,8 @@
 import abc
-from datetime import date
+from datetime import date, timedelta
 from urllib.parse import urlencode
 
+from sqlalchemy import or_
 from telebot import types
 
 import settings
@@ -31,10 +32,11 @@ class TransferAction(Action):
     take_params = True
 
     def __init__(self, base_url: str = 'main', data: dict = None, full_data: str = None):
+        data = data or {}
         if full_data:
             self.url = full_data
         else:
-            self.url = base_url + '?' + (urlencode(data) if data else '')
+            self.url = base_url + '?' + urlencode(data)
 
     def get_url_params(self):
         return self.url
@@ -108,6 +110,30 @@ class ViewHomeworkAction(Action):
         bot.send_message(query.from_user.id, 'Назад - /back')
 
 
+class ViewRecentHomeworkAction(Action):
+    key = 'view_recent_homework'
+    take_params = True
+
+    def __init__(self, full_data=None):
+        self.group_id = int(full_data)
+
+    def get_url_params(self):
+        return str(self.group_id)
+
+    def do(self, query: types.CallbackQuery):
+        bot = AppManager.get_bot()
+        lessons = models.LessonModel.select(or_(models.LessonModel.date == date.today(),
+                                                models.LessonModel.date == date.today() + timedelta(days=1)),
+                                            models.LessonModel.group_id == self.group_id).all()
+        for l in lessons:
+            sols = l.solutions
+            if not sols:
+                continue
+            bot.send_message(query.from_user.id, f'📘 {l.name} {Week.standart_day_format(l.date)}')
+            bot.copy_messages(query.from_user.id, settings.MEDIA_STORAGE_TG_ID, [s.msg_id for s in l.solutions])
+        bot.send_message(query.from_user.id, 'Назад - /back')
+
+
 class AskAction(Action):
     key = 'ask_action'
 
@@ -125,8 +151,8 @@ class AskAction(Action):
     def do(self, query: types.CallbackQuery):
         bot = AppManager.get_bot()
         bot.send_message(query.message.chat.id, self.ask_text)
-        bot.set_state(query.from_user.id, states.ActionStates.ASK)
 
+        bot.set_state(query.from_user.id, states.ActionStates.ASK)
         models.UserDataclass.set_by_key(query.from_user.id, 'asker_url', self.get_url())
 
     @abc.abstractmethod
@@ -141,11 +167,14 @@ class AskAction(Action):
 
     def correct_data_handler(self, message: types.Message):
         user_id = message.from_user.id
-        utils.delete_all_after_menu(user_id, message.id)
 
         models.UserDataclass.set_by_key(user_id, 'asker_url', None)
 
         self.process_data(user_id, self.extract_data(message))
+        self.post_actions(user_id, message)
+
+    def post_actions(self, user_id, message: types.Message):
+        utils.delete_all_after_menu(user_id, message.id)
 
 
 class CreateGroupAction(AskAction):
@@ -172,6 +201,9 @@ class CreateGroupAction(AskAction):
             g.members.append(u)
             if len(u.groups) == 1:
                 u.fav_group_id = g.id
+
+    def post_actions(self, user_id, message: types.Message):
+        utils.delete_all_after_menu(user_id, message.id)
         AppManager.get_menu().go_to_last_url(user_id)
 
 
@@ -201,7 +233,8 @@ class CreateInviteAction(AskAction):
         with AppManager.get_db().cnt_mng as s:
             s.add(models.GroupInviteModel(link=utils.generate_invite_link(), group_id=self.group_id, remain_uses=n))
 
-        AppManager.get_menu().set_prev_state(user_id)
+    def post_actions(self, user_id, message: types.Message):
+        AppManager.get_menu().return_to_prev_page(user_id, message.id)
 
 
 class JoinGroupAction(AskAction):
@@ -233,9 +266,10 @@ class JoinGroupAction(AskAction):
                 group.members.append(user)
                 if len(user.groups) == 1:
                     user.fav_group_id = group.id
-            gid = group.id
+            self.join_group_id = group.id
 
-        AppManager.get_menu().go_to_url(user_id, f'group?group={gid}')
+    def post_actions(self, user_id, message: types.Message):
+        AppManager.get_menu().go_to_url(user_id, f'group?group={self.join_group_id}')
 
 
 class KickUserAction(AskAction):
@@ -244,7 +278,7 @@ class KickUserAction(AskAction):
 
     def __init__(self, full_data):
         super().__init__(
-                'Введи ник участника',
+                'Введи номер участника',
                 'Бро, введи нормальный ник'
         )
         self.group_id = int(full_data)
@@ -253,20 +287,34 @@ class KickUserAction(AskAction):
         return str(self.group_id)
 
     def extract_data(self, message: types.Message):
-        return message.text
+        return int(message.text.removeprefix('/'))
 
     def check(self, message: types.Message) -> bool:
-        users = models.GroupModel.get(self.group_id).members
-        return (message.text != message.from_user.username and
-                message.text in [u.username for u in users])
+        text = message.text
+        if text[0] == '/':
+            text = text.removeprefix('/')
+        if not text.isdecimal():
+            return False
+        users = len(models.GroupModel.get(self.group_id).members)
+        return 1 <= int(text) <= users
+
+    def do(self, query: types.CallbackQuery):
+        super().do(query)
+        members = models.GroupModel.get(self.group_id).members
+        AppManager.get_menu().edit_menu_msg(query.from_user.id,
+                                            '\n'.join(f'/{i}: {u.username}' for i, u in enumerate(members, start=1)))
 
     def process_data(self, user_id, data):
         with AppManager.get_db().cnt_mng as s:
             group = models.GroupModel.get(self.group_id, session=s)
-            u = models.UserModel.select(models.UserModel.username == data, session=s).first()
-            group.members.remove(u)
+            u = group.members.pop(data - 1)
+            if u.id == user_id:
+                from random import choice
+                group.admin = choice(group.members)
 
-        AppManager.get_menu().set_prev_state(user_id)
+    def post_actions(self, user_id, message: types.Message):
+        AppManager.get_menu().go_to_last_url(user_id)
+        utils.delete_all_after_menu(user_id, message.id)
 
 
 class CreateTimetableAction(AskAction):
@@ -310,7 +358,8 @@ class CreateTimetableAction(AskAction):
                     lessons.append(models.LessonModel(date=d, group_id=self.group_id, name=l))
             s.add_all(lessons)
 
-        AppManager.get_menu().set_prev_state(user_id)
+    def post_actions(self, user_id, message: types.Message):
+        AppManager.get_menu().return_to_prev_page(user_id, message.id)
 
 
 class AddHomeworkAction(AskAction):
