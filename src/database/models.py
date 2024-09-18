@@ -20,15 +20,15 @@ class UserDataclass:
         return list(cls.__dataclass_fields__.keys())
 
     @classmethod
-    def get_by_key(cls, user_id: int, key: str):
-        res = AppManager.get_db().dynamic_user_data.get_by_key(user_id, key)
+    async def get_by_key(cls, user_id: int, key: str):
+        res = await AppManager.get_db().dynamic_user_data.get_by_key(user_id, key)
         if res is None:
             res = cls.__dataclass_fields__.get(key).default
         return res
 
     @staticmethod
-    def set_by_key(user_id: int, key: str, val):
-        return AppManager.get_db().dynamic_user_data.set_by_key(user_id, key, val)
+    async def set_by_key(user_id: int, key: str, val):
+        await AppManager.get_db().dynamic_user_data.set_by_key(user_id, key, val)
 
 
 @as_declarative()
@@ -69,8 +69,8 @@ class UserModel(AbstractModel):
     groups: Mapped[list['GroupModel']] = relationship(back_populates='members', uselist=True, secondary="user_to_group")
     solutions: Mapped[list['SolutionModel']] = relationship(back_populates='author', uselist=True)
 
-    def get_tg_user(self):
-        return utils.get_tg_user(self.id)
+    async def get_tg_user(self):
+        return await utils.get_tg_user(self.id)
 
 
 class GroupModel(AbstractModel):

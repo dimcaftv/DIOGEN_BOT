@@ -27,7 +27,7 @@ class GroupListPage(AbsMenuPage):
     urlpath = 'grouplist'
 
     def get_items(self) -> list[MenuItem]:
-        self.groups = models.UserModel.get(self.tg_user.id).groups
+        self.groups = models.UserModel.get(self.user_id).groups
 
         return KeyboardLayout(
                 (MenuItem(g.name, TransferAction('group', {'group': g.id}))
@@ -49,7 +49,7 @@ class GroupPage(AbsMenuPage):
 
     def get_items(self) -> list[MenuItem]:
         self.group = models.GroupModel.get(self.query_data['group'])
-        is_admin = self.group.is_group_admin(self.tg_user.id)
+        is_admin = self.group.is_group_admin(self.user_id)
         group_id = self.group.id
 
         return KeyboardLayout(
@@ -79,7 +79,7 @@ class TimetablePage(AbsMenuPage):
         self.group = models.GroupModel.get(self.query_data['group'])
         self.week = Week.from_str(self.query_data['week']) if 'week' in self.query_data else Week.today()
 
-        is_admin = self.group.is_group_admin(self.tg_user.id)
+        is_admin = self.group.is_group_admin(self.user_id)
         group_id = self.group.id
 
         return KeyboardLayout(
@@ -154,7 +154,7 @@ class UsersListPage(AbsMenuPage):
 
     def get_items(self) -> list[MenuItem]:
         self.group = models.GroupModel.get(self.query_data['group'])
-        is_admin = self.group.is_group_admin(self.tg_user.id)
+        is_admin = self.group.is_group_admin(self.user_id)
 
         return KeyboardLayout(
                 MenuItem('☠ кикнуть', KickUserAction(self.group.id), True),

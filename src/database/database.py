@@ -2,7 +2,7 @@ from dataclasses import asdict
 
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
-from telebot import StatePickleStorage, StateStorageBase
+from telebot.asyncio_storage import StatePickleStorage, StateStorageBase
 
 import settings
 from . import models
@@ -12,23 +12,23 @@ class PrivateChatStorageAdapter:
     def __init__(self, storage: StateStorageBase):
         self.storage = storage
 
-    def set_default_state(self, user_id):
-        if self.storage.get_data(user_id, user_id) is None:
-            self.storage.set_state(user_id, user_id, 0)
-        with self.get_cnt_mng_data(user_id) as data:
+    async def set_default_state(self, user_id):
+        if await self.storage.get_data(user_id, user_id) is None:
+            await self.storage.set_state(user_id, user_id, 0)
+        async with self.get_cnt_mng_data(user_id) as data:
             data.setdefault('page_url', 'main')
             data.setdefault('asker_url', '')
             data.setdefault('menu_msg_id', 0)
 
-    def set_data(self, user_id, key, value):
-        if self.get_data(user_id, key) != value:
-            self.storage.set_data(user_id, user_id, key, value)
+    async def set_data(self, user_id, key, value):
+        if await self.get_data(user_id, key) != value:
+            await self.storage.set_data(user_id, user_id, key, value)
 
-    def get_data(self, user_id, key):
-        return self.get_user_data(user_id).get(key)
+    async def get_data(self, user_id, key):
+        return (await self.get_user_data(user_id)).get(key)
 
-    def get_user_data(self, user_id):
-        return self.storage.get_data(user_id, user_id)
+    async def get_user_data(self, user_id):
+        return await self.storage.get_data(user_id, user_id)
 
     def get_cnt_mng_data(self, user_id):
         return self.storage.get_interactive_data(user_id, user_id)
@@ -38,19 +38,19 @@ class UserDataManager:
     def __init__(self, storage: StateStorageBase):
         self.storage = PrivateChatStorageAdapter(storage)
 
-    def get_user(self, user_id: int):
-        data = self.storage.get_user_data(user_id)
+    async def get_user(self, user_id: int):
+        data = await self.storage.get_user_data(user_id)
         return models.UserDataclass(*[data[k] for k in models.UserDataclass.get_keys()])
 
-    def save_user(self, user_id: int, user: models.UserDataclass):
-        with self.storage.get_cnt_mng_data(user_id) as data:
+    async def save_user(self, user_id: int, user: models.UserDataclass):
+        async with self.storage.get_cnt_mng_data(user_id) as data:
             data.update(asdict(user))
 
-    def get_by_key(self, user_id: int, key: str):
-        return self.storage.get_data(user_id, key)
+    async def get_by_key(self, user_id: int, key: str):
+        return await self.storage.get_data(user_id, key)
 
-    def set_by_key(self, user_id: int, key: str, val):
-        self.storage.set_data(user_id, key, val)
+    async def set_by_key(self, user_id: int, key: str, val):
+        await self.storage.set_data(user_id, key, val)
 
 
 class SQLDatabaseManager:

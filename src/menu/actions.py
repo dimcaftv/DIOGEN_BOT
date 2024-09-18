@@ -17,7 +17,7 @@ class Action(abc.ABC):
     take_params: bool = False
 
     @abc.abstractmethod
-    def do(self, query: types.CallbackQuery):
+    async def do(self, query: types.CallbackQuery):
         raise NotImplementedError
 
     def get_url_params(self):
@@ -41,8 +41,8 @@ class TransferAction(Action):
     def get_url_params(self):
         return self.url
 
-    def do(self, query: types.CallbackQuery):
-        AppManager.get_menu().go_to_url(query.from_user.id, self.url)
+    async def do(self, query: types.CallbackQuery):
+        await AppManager.get_menu().go_to_url(query.from_user.id, self.url)
 
 
 class DeleteGroupAction(Action):
@@ -52,10 +52,10 @@ class DeleteGroupAction(Action):
     def __init__(self, full_data):
         self.group_id = int(full_data)
 
-    def do(self, query: types.CallbackQuery):
+    async def do(self, query: types.CallbackQuery):
         with AppManager.get_db().cnt_mng as s:
             s.delete(models.GroupModel.get(self.group_id, session=s))
-        AppManager.get_menu().go_to_url(query.from_user.id, 'grouplist')
+        await AppManager.get_menu().go_to_url(query.from_user.id, 'grouplist')
 
     def get_url_params(self):
         return str(self.group_id)
@@ -77,7 +77,7 @@ class CopyPrevTimetableAction(Action):
     def get_url_params(self):
         return str(self.group_id) + '&' + str(self.week)
 
-    def do(self, query: types.CallbackQuery):
+    async def do(self, query: types.CallbackQuery):
         pweek = self.week.prev()
         lessons = []
         with AppManager.get_db().cnt_mng as s:
@@ -100,14 +100,15 @@ class ViewHomeworkAction(Action):
     def get_url_params(self):
         return str(self.lesson_id)
 
-    def do(self, query: types.CallbackQuery):
+    async def do(self, query: types.CallbackQuery):
         solutions = [s.msg_id for s in models.LessonModel.get(self.lesson_id).solutions]
         bot = AppManager.get_bot()
         if not solutions:
-            bot.answer_callback_query(query.id, 'На этот урок ничего нет', True)
+            await bot.answer_callback_query(query.id, 'На этот урок ничего нет', True)
             return
-        bot.copy_messages(query.from_user.id, settings.MEDIA_STORAGE_TG_ID, solutions)
-        bot.send_message(query.from_user.id, 'Назад - /back')
+
+        await bot.copy_messages(query.from_user.id, settings.MEDIA_STORAGE_TG_ID, solutions)
+        await bot.send_message(query.from_user.id, 'Назад - /back')
 
 
 class ViewRecentHomeworkAction(Action):
@@ -120,7 +121,7 @@ class ViewRecentHomeworkAction(Action):
     def get_url_params(self):
         return str(self.group_id)
 
-    def do(self, query: types.CallbackQuery):
+    async def do(self, query: types.CallbackQuery):
         bot = AppManager.get_bot()
         lessons = models.LessonModel.select(or_(models.LessonModel.date == date.today(),
                                                 models.LessonModel.date == date.today() + timedelta(days=1)),
@@ -129,9 +130,9 @@ class ViewRecentHomeworkAction(Action):
             sols = l.solutions
             if not sols:
                 continue
-            bot.send_message(query.from_user.id, f'📘 {l.name} {Week.standart_day_format(l.date)}')
-            bot.copy_messages(query.from_user.id, settings.MEDIA_STORAGE_TG_ID, [s.msg_id for s in l.solutions])
-        bot.send_message(query.from_user.id, 'Назад - /back')
+            await bot.send_message(query.from_user.id, f'📘 {l.name} {Week.standart_day_format(l.date)}')
+            await bot.copy_messages(query.from_user.id, settings.MEDIA_STORAGE_TG_ID, [s.msg_id for s in l.solutions])
+        await bot.send_message(query.from_user.id, 'Назад - /back')
 
 
 class AskAction(Action):
@@ -148,33 +149,33 @@ class AskAction(Action):
     def extract_data(self, message: types.Message):
         raise NotImplementedError
 
-    def do(self, query: types.CallbackQuery):
+    async def do(self, query: types.CallbackQuery):
         bot = AppManager.get_bot()
-        bot.send_message(query.message.chat.id, self.ask_text)
+        await bot.send_message(query.message.chat.id, self.ask_text)
 
-        bot.set_state(query.from_user.id, states.ActionStates.ASK)
-        models.UserDataclass.set_by_key(query.from_user.id, 'asker_url', self.get_url())
+        await bot.set_state(query.from_user.id, states.ActionStates.ASK)
+        await models.UserDataclass.set_by_key(query.from_user.id, 'asker_url', self.get_url())
 
     @abc.abstractmethod
     def process_data(self, user_id, data):
         raise NotImplementedError
 
-    def message_handler(self, message: types.Message):
-        [self.wrong_data_handler, self.correct_data_handler][self.check(message)](message)
+    async def message_handler(self, message: types.Message):
+        await ([self.wrong_data_handler, self.correct_data_handler][self.check(message)](message))
 
-    def wrong_data_handler(self, message: types.Message):
-        AppManager.get_bot().send_message(message.chat.id, self.wrong_text)
+    async def wrong_data_handler(self, message: types.Message):
+        await AppManager.get_bot().send_message(message.chat.id, self.wrong_text)
 
-    def correct_data_handler(self, message: types.Message):
+    async def correct_data_handler(self, message: types.Message):
         user_id = message.from_user.id
 
-        models.UserDataclass.set_by_key(user_id, 'asker_url', None)
+        await models.UserDataclass.set_by_key(user_id, 'asker_url', None)
 
         self.process_data(user_id, self.extract_data(message))
-        self.post_actions(user_id, message)
+        await self.post_actions(user_id, message)
 
-    def post_actions(self, user_id, message: types.Message):
-        utils.delete_all_after_menu(user_id, message.id)
+    async def post_actions(self, user_id, message: types.Message):
+        await utils.delete_all_after_menu(user_id, message.id)
 
 
 class CreateGroupAction(AskAction):
@@ -202,9 +203,9 @@ class CreateGroupAction(AskAction):
             if len(u.groups) == 1:
                 u.fav_group_id = g.id
 
-    def post_actions(self, user_id, message: types.Message):
-        utils.delete_all_after_menu(user_id, message.id)
-        AppManager.get_menu().go_to_last_url(user_id)
+    async def post_actions(self, user_id, message: types.Message):
+        await utils.delete_all_after_menu(user_id, message.id)
+        await AppManager.get_menu().go_to_last_url(user_id)
 
 
 class CreateInviteAction(AskAction):
@@ -233,8 +234,8 @@ class CreateInviteAction(AskAction):
         with AppManager.get_db().cnt_mng as s:
             s.add(models.GroupInviteModel(link=utils.generate_invite_link(), group_id=self.group_id, remain_uses=n))
 
-    def post_actions(self, user_id, message: types.Message):
-        AppManager.get_menu().return_to_prev_page(user_id, message.id)
+    async def post_actions(self, user_id, message: types.Message):
+        await AppManager.get_menu().return_to_prev_page(user_id, message.id)
 
 
 class JoinGroupAction(AskAction):
@@ -268,8 +269,8 @@ class JoinGroupAction(AskAction):
                     user.fav_group_id = group.id
             self.join_group_id = group.id
 
-    def post_actions(self, user_id, message: types.Message):
-        AppManager.get_menu().go_to_url(user_id, f'group?group={self.join_group_id}')
+    async def post_actions(self, user_id, message: types.Message):
+        await AppManager.get_menu().go_to_url(user_id, f'group?group={self.join_group_id}')
 
 
 class KickUserAction(AskAction):
@@ -298,11 +299,12 @@ class KickUserAction(AskAction):
         users = len(models.GroupModel.get(self.group_id).members)
         return 1 <= int(text) <= users
 
-    def do(self, query: types.CallbackQuery):
-        super().do(query)
+    async def do(self, query: types.CallbackQuery):
+        await super().do(query)
         members = models.GroupModel.get(self.group_id).members
-        AppManager.get_menu().edit_menu_msg(query.from_user.id,
-                                            '\n'.join(f'/{i}: {u.username}' for i, u in enumerate(members, start=1)))
+        await AppManager.get_menu().edit_menu_msg(query.from_user.id,
+                                                  '\n'.join(f'/{i}: {u.username}' for i, u in
+                                                            enumerate(members, start=1)))
 
     def process_data(self, user_id, data):
         with AppManager.get_db().cnt_mng as s:
@@ -312,9 +314,9 @@ class KickUserAction(AskAction):
                 from random import choice
                 group.admin = choice(group.members)
 
-    def post_actions(self, user_id, message: types.Message):
-        AppManager.get_menu().go_to_last_url(user_id)
-        utils.delete_all_after_menu(user_id, message.id)
+    async def post_actions(self, user_id, message: types.Message):
+        await AppManager.get_menu().go_to_last_url(user_id)
+        await utils.delete_all_after_menu(user_id, message.id)
 
 
 class CreateTimetableAction(AskAction):
@@ -358,8 +360,8 @@ class CreateTimetableAction(AskAction):
                     lessons.append(models.LessonModel(date=d, group_id=self.group_id, name=l))
             s.add_all(lessons)
 
-    def post_actions(self, user_id, message: types.Message):
-        AppManager.get_menu().return_to_prev_page(user_id, message.id)
+    async def post_actions(self, user_id, message: types.Message):
+        await AppManager.get_menu().return_to_prev_page(user_id, message.id)
 
 
 class AddHomeworkAction(AskAction):
@@ -385,19 +387,19 @@ class AddHomeworkAction(AskAction):
     def process_data(self, user_id, data):
         pass
 
-    def wrong_data_handler(self, message: types.Message):
-        super().wrong_data_handler(message)
+    async def wrong_data_handler(self, message: types.Message):
+        await super().wrong_data_handler(message)
         user_id = message.from_user.id
-        utils.delete_all_after_menu(user_id, message.id + 1)
+        await utils.delete_all_after_menu(user_id, message.id + 1)
 
-        models.UserDataclass.set_by_key(user_id, 'asker_url', None)
+        await models.UserDataclass.set_by_key(user_id, 'asker_url', None)
 
-        AppManager.get_menu().set_prev_state(user_id)
+        await AppManager.get_menu().set_prev_state(user_id)
 
-    def correct_data_handler(self, message: types.Message):
-        solution = AppManager.get_bot().copy_message(settings.MEDIA_STORAGE_TG_ID,
-                                                     message.from_user.id,
-                                                     message.id).message_id
+    async def correct_data_handler(self, message: types.Message):
+        solution = (await AppManager.get_bot().copy_message(settings.MEDIA_STORAGE_TG_ID,
+                                                            message.from_user.id,
+                                                            message.id)).message_id
         with AppManager.get_db().cnt_mng as s:
             s.add(models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution,
                                        author_id=message.from_user.id, created=date.today()))

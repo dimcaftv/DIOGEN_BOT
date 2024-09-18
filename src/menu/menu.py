@@ -1,4 +1,5 @@
 import abc
+import asyncio
 from typing import Iterable
 from urllib.parse import parse_qs, urlparse
 
@@ -35,11 +36,11 @@ class KeyboardLayout:
 
 
 class AbsMenuPage(abc.ABC):
-    state: states.AbsAdvancedState = None
+    state: states.BotPagesStates = None
     urlpath: str = None
 
     def __init__(self, user_id: int, query: str, data: dict = None):
-        self.tg_user = utils.get_tg_user(user_id)
+        self.user_id = user_id
         self.query_data = self.extract_data(query)
         self.data = data if data else {}
         self.items = self.get_items()
@@ -75,17 +76,17 @@ class Menu:
         self.pages = {p.urlpath: p for p in pages} if pages else {}
         self.actions = {a.key: a for a in actions_list} if actions_list else {}
 
-    def update_to_page(self, page: AbsMenuPage):
-        user_id = page.tg_user.id
-        AppManager.get_bot().set_state(user_id, page.state)
-        self.edit_menu_msg(user_id, **page.get_message_kw())
+    async def update_to_page(self, page: AbsMenuPage):
+        user_id = page.user_id
+        await AppManager.get_bot().set_state(user_id, page.state)
+        asyncio.create_task(self.edit_menu_msg(user_id, **page.get_message_kw()))
 
-    def edit_menu_msg(self, user_id, text, reply_markup=None):
-        menu_id = models.UserDataclass.get_by_key(user_id, 'menu_msg_id')
-        self.edit_msg(user_id, menu_id, text, reply_markup)
+    async def edit_menu_msg(self, user_id, text, reply_markup=None):
+        menu_id = await models.UserDataclass.get_by_key(user_id, 'menu_msg_id')
+        await self.edit_msg(user_id, menu_id, text, reply_markup)
 
-    def edit_msg(self, user_id, msg_id, text, reply_markup=None):
-        AppManager.get_bot().edit_message_text(
+    async def edit_msg(self, user_id, msg_id, text, reply_markup=None):
+        await AppManager.get_bot().edit_message_text(
                 chat_id=user_id,
                 message_id=msg_id,
                 text=text,
@@ -106,21 +107,21 @@ class Menu:
         parse = urlparse(url)
         return self.get_page_class(parse.path)(user_id, parse.query, data)
 
-    def go_to_url(self, user_id: int, url: str, data: dict = None):
+    async def go_to_url(self, user_id: int, url: str, data: dict = None):
         page = self.get_page(user_id, url, data)
-        models.UserDataclass.set_by_key(user_id, 'page_url', url)
-        self.update_to_page(page)
+        await models.UserDataclass.set_by_key(user_id, 'page_url', url)
+        await self.update_to_page(page)
 
-    def go_to_last_url(self, user_id: int):
-        self.go_to_url(user_id, self.get_last_url(user_id))
+    async def go_to_last_url(self, user_id: int):
+        await self.go_to_url(user_id, await self.get_last_url(user_id))
 
-    def get_last_url(self, user_id: int):
-        return models.UserDataclass.get_by_key(user_id, 'page_url')
+    async def get_last_url(self, user_id: int):
+        return await models.UserDataclass.get_by_key(user_id, 'page_url')
 
-    def set_prev_state(self, user_id: int):
-        state = self.get_page_class(urlparse(self.get_last_url(user_id)).path).state
-        AppManager.get_bot().set_state(user_id, state)
+    async def set_prev_state(self, user_id: int):
+        state = self.get_page_class(urlparse(await self.get_last_url(user_id)).path).state
+        await AppManager.get_bot().set_state(user_id, state)
 
-    def return_to_prev_page(self, user_id: int, last_msg_id: int):
-        self.set_prev_state(user_id)
-        utils.delete_all_after_menu(user_id, last_msg_id)
+    async def return_to_prev_page(self, user_id: int, last_msg_id: int):
+        await self.set_prev_state(user_id)
+        await utils.delete_all_after_menu(user_id, last_msg_id)

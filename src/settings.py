@@ -2,7 +2,8 @@ import os
 import typing
 
 import dotenv
-from telebot import custom_filters, types
+from telebot import asyncio_filters, types
+from telebot.util import content_type_media
 
 from handlers import callback_handlers, message_handlers
 from menu import actions, pages
@@ -26,7 +27,7 @@ cmd_handlers: typing.List[typing.Tuple[typing.Callable, typing.LiteralString]] =
 ]
 
 kwargs_handlers: typing.List[typing.Tuple[typing.Callable, typing.Mapping]] = [
-    (message_handlers.asker_handler, {'state': states.ActionStates.ASK})
+    (message_handlers.asker_handler, {'content_types': content_type_media, 'state': states.ActionStates.ASK})
 ]
 
 callbacks_handlers: typing.List[typing.Tuple[typing.Callable, typing.Mapping]] = [
@@ -41,7 +42,7 @@ commands_list = [
 ]
 
 bot_filters = [
-    custom_filters.StateFilter
+    asyncio_filters.StateFilter
 ]
 
 pages_list = [

@@ -1,5 +1,5 @@
-from telebot import TeleBot
+from telebot.async_telebot import AsyncTeleBot
 
 
-def register_commands(bot: TeleBot, commands):
-    bot.set_my_commands(commands)
+async def register_commands(bot: AsyncTeleBot, commands):
+    await bot.set_my_commands(commands)

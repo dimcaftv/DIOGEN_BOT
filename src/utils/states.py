@@ -1,9 +1,4 @@
-from telebot import State
-from telebot.handler_backends import StatesGroup
-
-
-class AbsAdvancedState(State):
-    pass
+from telebot.asyncio_handler_backends import State, StatesGroup
 
 
 class BotPagesStates(StatesGroup):

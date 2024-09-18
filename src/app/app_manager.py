@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from utils.singleton import Singleton
 
 if TYPE_CHECKING:
-    from telebot import TeleBot
+    from telebot.async_telebot import AsyncTeleBot
     from menu.menu import Menu
     from database.database import DatabaseInterface
 
@@ -13,7 +13,7 @@ class AppManager(metaclass=Singleton):
         self.app = app
 
     @classmethod
-    def get_bot(cls) -> 'TeleBot':
+    def get_bot(cls) -> 'AsyncTeleBot':
         return cls().app.bot
 
     @classmethod

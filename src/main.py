@@ -1,10 +1,12 @@
+import asyncio
+
 from app.app import App
 
 
-def main():
+async def main():
     app = App()
-    app.start()
+    await app.start()
 
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
