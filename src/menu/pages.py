@@ -164,7 +164,7 @@ class UsersListPage(AbsMenuPage):
 
     def get_page_text(self) -> str:
         return (f'Участники {self.group.name}:\n' +
-                ', '.join(u.username for u in self.group.members))
+                ', '.join((u.username or str(u.id)) for u in self.group.members))
 
 
 class ActiveInvitesPage(AbsMenuPage):
