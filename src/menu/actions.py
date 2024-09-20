@@ -53,8 +53,8 @@ class DeleteGroupAction(Action):
         self.group_id = int(full_data)
 
     async def do(self, query: types.CallbackQuery):
-        with AppManager.get_db().cnt_mng as s:
-            s.delete(models.GroupModel.get(self.group_id, session=s))
+        async with AppManager.get_db().cnt_mng as s:
+            await s.delete(await models.GroupModel.get(self.group_id, session=s))
         await AppManager.get_menu().go_to_url(query.from_user.id, 'grouplist')
 
     def get_url_params(self):
@@ -80,12 +80,12 @@ class CopyPrevTimetableAction(Action):
     async def do(self, query: types.CallbackQuery):
         pweek = self.week.prev()
         lessons = []
-        with AppManager.get_db().cnt_mng as s:
+        async with AppManager.get_db().cnt_mng as s:
             for d1, d2 in zip(pweek, self.week):
-                models.LessonModel.delete_where(models.LessonModel.date == d2,
-                                                models.LessonModel.group_id == self.group_id, session=s)
-                for l in models.LessonModel.select(models.LessonModel.date == d1,
-                                                   models.LessonModel.group_id == self.group_id).all():
+                await models.LessonModel.delete_where(models.LessonModel.date == d2,
+                                                      models.LessonModel.group_id == self.group_id, session=s)
+                for l in (await models.LessonModel.select(models.LessonModel.date == d1,
+                                                          models.LessonModel.group_id == self.group_id)).all():
                     lessons.append(models.LessonModel(date=d2, group_id=self.group_id, name=l.name))
             s.add_all(lessons)
 
@@ -101,7 +101,7 @@ class ViewHomeworkAction(Action):
         return str(self.lesson_id)
 
     async def do(self, query: types.CallbackQuery):
-        solutions = [s.msg_id for s in models.LessonModel.get(self.lesson_id).solutions]
+        solutions = [s.msg_id for s in (await models.LessonModel.get(self.lesson_id)).solutions]
         bot = AppManager.get_bot()
         if not solutions:
             await bot.answer_callback_query(query.id, 'На этот урок ничего нет', True)
@@ -123,9 +123,9 @@ class ViewRecentHomeworkAction(Action):
 
     async def do(self, query: types.CallbackQuery):
         bot = AppManager.get_bot()
-        lessons = models.LessonModel.select(or_(models.LessonModel.date == date.today(),
+        lessons = (await models.LessonModel.select(or_(models.LessonModel.date == date.today(),
                                                 models.LessonModel.date == date.today() + timedelta(days=1)),
-                                            models.LessonModel.group_id == self.group_id).all()
+                                                   models.LessonModel.group_id == self.group_id)).all()
         for l in lessons:
             sols = l.solutions
             if not sols:
@@ -142,7 +142,7 @@ class AskAction(Action):
         self.ask_text = ask_text
         self.wrong_text = wrong_text
 
-    def check(self, message: types.Message) -> bool:
+    async def check(self, message: types.Message) -> bool:
         return True
 
     @abc.abstractmethod
@@ -157,7 +157,7 @@ class AskAction(Action):
         await models.UserDataclass.set_by_key(query.from_user.id, 'asker_url', self.get_url())
 
     @abc.abstractmethod
-    def process_data(self, user_id, data):
+    async def process_data(self, user_id, data):
         raise NotImplementedError
 
     async def message_handler(self, message: types.Message):
@@ -171,7 +171,7 @@ class AskAction(Action):
 
         await models.UserDataclass.set_by_key(user_id, 'asker_url', None)
 
-        self.process_data(user_id, self.extract_data(message))
+        await self.process_data(user_id, self.extract_data(message))
         await self.post_actions(user_id, message)
 
     async def post_actions(self, user_id, message: types.Message):
@@ -187,15 +187,15 @@ class CreateGroupAction(AskAction):
                 'Бро, это не название'
         )
 
-    def check(self, message: types.Message) -> bool:
+    async def check(self, message: types.Message) -> bool:
         return bool(message.text)
 
     def extract_data(self, message: types.Message):
         return message.text
 
-    def process_data(self, user_id, data):
-        with AppManager.get_db().cnt_mng as s:
-            u = models.UserModel.get(user_id, session=s)
+    async def process_data(self, user_id, data):
+        async with AppManager.get_db().cnt_mng as s:
+            u = await models.UserModel.get(user_id, session=s)
             g = models.GroupModel(name=data)
             s.add_all([g, u])
             g.admin = u
@@ -222,7 +222,7 @@ class CreateInviteAction(AskAction):
     def get_url_params(self):
         return str(self.group_id)
 
-    def check(self, message: types.Message) -> bool:
+    async def check(self, message: types.Message) -> bool:
         if not (message.text and message.text.isdecimal()):
             return False
         return int(message.text) > 0
@@ -230,9 +230,10 @@ class CreateInviteAction(AskAction):
     def extract_data(self, message: types.Message):
         return int(message.text)
 
-    def process_data(self, user_id, n):
-        with AppManager.get_db().cnt_mng as s:
-            s.add(models.GroupInviteModel(link=utils.generate_invite_link(), group_id=self.group_id, remain_uses=n))
+    async def process_data(self, user_id, n):
+        async with AppManager.get_db().cnt_mng as s:
+            s.add(models.GroupInviteModel(link=(await utils.generate_invite_link()), group_id=self.group_id,
+                                          remain_uses=n))
 
     async def post_actions(self, user_id, message: types.Message):
         await AppManager.get_menu().return_to_prev_page(user_id, message.id)
@@ -247,23 +248,23 @@ class JoinGroupAction(AskAction):
                 'Паленый код бро'
         )
 
-    def check(self, message: types.Message) -> bool:
+    async def check(self, message: types.Message) -> bool:
         l = message.text.lower()
-        invite = models.GroupInviteModel.get(l)
+        invite = await models.GroupInviteModel.get(l)
         return bool(invite) and invite.remain_uses > 0
 
     def extract_data(self, message: types.Message):
         return message.text.lower()
 
-    def process_data(self, user_id, data):
-        with AppManager.get_db().cnt_mng as s:
-            invite = models.GroupInviteModel.get(data, session=s)
-            user = models.UserModel.get(user_id, session=s)
+    async def process_data(self, user_id, data):
+        async with AppManager.get_db().cnt_mng as s:
+            invite = await models.GroupInviteModel.get(data, session=s)
+            user = await models.UserModel.get(user_id, session=s)
             group = invite.group
             if user not in group.members:
                 invite.remain_uses -= 1
                 if invite.remain_uses == 0:
-                    s.delete(invite)
+                    await s.delete(invite)
                 group.members.append(user)
                 if len(user.groups) == 1:
                     user.fav_group_id = group.id
@@ -290,25 +291,25 @@ class KickUserAction(AskAction):
     def extract_data(self, message: types.Message):
         return int(message.text.removeprefix('/'))
 
-    def check(self, message: types.Message) -> bool:
+    async def check(self, message: types.Message) -> bool:
         text = message.text
         if text[0] == '/':
             text = text.removeprefix('/')
         if not text.isdecimal():
             return False
-        users = len(models.GroupModel.get(self.group_id).members)
+        users = len((await models.GroupModel.get(self.group_id)).members)
         return 1 <= int(text) <= users
 
     async def do(self, query: types.CallbackQuery):
         await super().do(query)
-        members = models.GroupModel.get(self.group_id).members
+        members = (await models.GroupModel.get(self.group_id)).members
         await AppManager.get_menu().edit_menu_msg(query.from_user.id,
                                                   '\n'.join(f'/{i}: {u.username}' for i, u in
                                                             enumerate(members, start=1)))
 
-    def process_data(self, user_id, data):
-        with AppManager.get_db().cnt_mng as s:
-            group = models.GroupModel.get(self.group_id, session=s)
+    async def process_data(self, user_id, data):
+        async with AppManager.get_db().cnt_mng as s:
+            group = await models.GroupModel.get(self.group_id, session=s)
             u = group.members.pop(data - 1)
             if u.id == user_id:
                 from random import choice
@@ -328,31 +329,30 @@ class CreateTimetableAction(AskAction):
                 'Введи уроки для каждого дня недели на новой строке через пробел ("-" если нет уроков)',
                 'Бро, введи нормальное расписание'
         )
+        self.group_id = group_id
+        self.week = week
         if full_data:
             part = full_data.split('&')
             self.group_id = int(part[0])
             self.week = Week.from_str(part[1])
-        else:
-            self.group_id = group_id
-            self.week = week
 
     def get_url_params(self):
         return str(self.group_id) + '&' + str(self.week)
 
-    def check(self, message: types.Message) -> bool:
+    async def check(self, message: types.Message) -> bool:
         part = message.text.split('\n')
         return len(part) == 7 and all(p.strip() for p in part)
 
     def extract_data(self, message: types.Message):
         return message.text
 
-    def process_data(self, user_id, data):
+    async def process_data(self, user_id, data):
         timetable = [p.strip().split() for p in data.split('\n')]
 
         lessons = []
-        with AppManager.get_db().cnt_mng as s:
+        async with AppManager.get_db().cnt_mng as s:
             for d, t in zip(self.week, timetable):
-                models.LessonModel.delete_where(models.LessonModel.date == d,
+                await models.LessonModel.delete_where(models.LessonModel.date == d,
                                                 models.LessonModel.group_id == self.group_id, session=s)
                 if t[0] == '-':
                     continue
@@ -378,13 +378,13 @@ class AddHomeworkAction(AskAction):
     def get_url_params(self):
         return str(self.lesson_id)
 
-    def check(self, message: types.Message) -> bool:
+    async def check(self, message: types.Message) -> bool:
         return message.text not in ['/stop', 'stop']
 
     def extract_data(self, message: types.Message):
         pass
 
-    def process_data(self, user_id, data):
+    async def process_data(self, user_id, data):
         pass
 
     async def wrong_data_handler(self, message: types.Message):
@@ -400,6 +400,6 @@ class AddHomeworkAction(AskAction):
         solution = (await AppManager.get_bot().copy_message(settings.MEDIA_STORAGE_TG_ID,
                                                             message.from_user.id,
                                                             message.id)).message_id
-        with AppManager.get_db().cnt_mng as s:
-            s.add(models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution,
-                                       author_id=message.from_user.id, created=date.today()))
+        async with AppManager.get_db().cnt_mng as s:
+            await s.add(models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution,
+                                             author_id=message.from_user.id, created=date.today()))

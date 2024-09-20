@@ -1,6 +1,6 @@
 from dataclasses import asdict
 
-import sqlalchemy
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from telebot.asyncio_storage import StatePickleStorage, StateStorageBase
 
@@ -55,14 +55,16 @@ class UserDataManager:
 
 class SQLDatabaseManager:
     def __init__(self):
-        self.engine = sqlalchemy.create_engine(f'{settings.DB_FULL_PATH}', echo=settings.DEBUG)
-        self.sm = sessionmaker(self.engine)
+        self.engine = create_async_engine(settings.DB_FULL_PATH, echo=settings.DEBUG)
+        self.sm = sessionmaker(self.engine, class_=AsyncSession)
         self.selecting_session = self.sm()
 
-        models.AbstractModel.metadata.create_all(self.engine)
+    async def create_all_tables(self):
+        async with self.engine.begin() as conn:
+            await conn.run_sync(models.AbstractModel.metadata.create_all)
 
-    def exec(self, stmt):
-        return self.selecting_session.scalars(stmt)
+    async def exec(self, stmt):
+        return await self.selecting_session.scalars(stmt)
 
 
 class DatabaseInterface:
@@ -74,20 +76,20 @@ class DatabaseInterface:
     def selecting_session(self):
         return self.db.selecting_session
 
-    def commit(self):
-        self.selecting_session.commit()
+    async def commit(self):
+        await self.selecting_session.commit()
 
-    def exec(self, stmt):
-        return self.db.exec(stmt)
+    async def exec(self, stmt):
+        return await self.db.exec(stmt)
 
-    def save(self, obj: models.AbstractModel):
-        self.selecting_session.merge(obj)
-        self.selecting_session.commit()
+    async def save(self, obj: models.AbstractModel):
+        await self.selecting_session.merge(obj)
+        await self.selecting_session.commit()
 
-    def delete(self, obj: models.AbstractModel):
-        self.selecting_session.delete(obj)
-        self.selecting_session.commit()
+    async def delete(self, obj: models.AbstractModel):
+        await self.selecting_session.delete(obj)
+        await self.selecting_session.commit()
 
     @property
     def cnt_mng(self):
-        return self.db.sm.begin()
+        return self.db.sm().begin()

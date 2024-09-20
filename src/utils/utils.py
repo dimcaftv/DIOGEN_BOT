@@ -11,8 +11,8 @@ async def get_tg_user(user_id: int):
     return (await AppManager.get_bot().get_chat_member(user_id, user_id)).user
 
 
-def generate_invite_link():
-    links = [i.link for i in models.GroupInviteModel.select().all()]
+async def generate_invite_link():
+    links = [i.link for i in (await models.GroupInviteModel.select()).all()]
     while (l := uuid4().hex[:6]) in links:
         continue
     return l

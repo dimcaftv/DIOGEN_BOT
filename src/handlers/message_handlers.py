@@ -11,8 +11,8 @@ from utils import utils
 
 
 async def start_cmd_handler(message: types.Message, bot: AsyncTeleBot):
-    with AppManager.get_db().cnt_mng as s:
-        s.merge(models.UserModel(id=message.from_user.id, username=message.from_user.username))
+    async with AppManager.get_db().cnt_mng as s:
+        await s.merge(models.UserModel(id=message.from_user.id, username=message.from_user.username))
 
     await AppManager.get_db().dynamic_user_data.storage.set_default_state(message.from_user.id)
     asyncio.create_task(bot.send_message(message.chat.id, messages.start_cmd_text))
@@ -24,7 +24,7 @@ async def help_cmd_handler(message: types.Message, bot: AsyncTeleBot):
 
 async def menu_cmd_handler(message: types.Message, bot: AsyncTeleBot):
     user_id = message.from_user.id
-    u = models.UserModel.get(user_id)
+    u = await models.UserModel.get(user_id)
     mmid = await models.UserDataclass.get_by_key(user_id, 'menu_msg_id')
     if mmid == 0:
         mmid = message.id

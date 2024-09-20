@@ -1,5 +1,4 @@
 import abc
-import asyncio
 from typing import Iterable
 from urllib.parse import parse_qs, urlparse
 
@@ -39,11 +38,19 @@ class AbsMenuPage(abc.ABC):
     state: states.BotPagesStates = None
     urlpath: str = None
 
+    @classmethod
+    async def ainit(cls, *args, **kwargs):
+        self = cls(*args, **kwargs)
+        await self.post_init()
+        return self
+
     def __init__(self, user_id: int, query: str, data: dict = None):
         self.user_id = user_id
         self.query_data = self.extract_data(query)
         self.data = data if data else {}
-        self.items = self.get_items()
+
+    async def post_init(self):
+        pass
 
     def extract_data(self, query: str):
         res = {}
@@ -64,7 +71,7 @@ class AbsMenuPage(abc.ABC):
         raise NotImplementedError
 
     def get_inline_kb(self):
-        return self.items.ik
+        return self.get_items().ik
 
     def get_message_kw(self):
         return {'text': self.get_page_text(), 'reply_markup': self.get_inline_kb()}
@@ -79,7 +86,8 @@ class Menu:
     async def update_to_page(self, page: AbsMenuPage):
         user_id = page.user_id
         await AppManager.get_bot().set_state(user_id, page.state)
-        asyncio.create_task(self.edit_menu_msg(user_id, **page.get_message_kw()))
+        await self.edit_menu_msg(user_id, **page.get_message_kw())
+        # asyncio.create_task(self.edit_menu_msg(user_id, **page.get_message_kw()))
 
     async def edit_menu_msg(self, user_id, text, reply_markup=None):
         menu_id = await models.UserDataclass.get_by_key(user_id, 'menu_msg_id')
@@ -100,22 +108,22 @@ class Menu:
             return action(full_data=part[2])
         return action()
 
-    def get_page_class(self, path):
+    def get_page_class(self, path) -> type[AbsMenuPage]:
         return self.pages[path]
 
-    def get_page(self, user_id: int, url: str, data: dict = None):
+    async def get_page(self, user_id: int, url: str, data: dict = None) -> AbsMenuPage:
         parse = urlparse(url)
-        return self.get_page_class(parse.path)(user_id, parse.query, data)
+        return await self.get_page_class(parse.path).ainit(user_id, parse.query, data)
 
     async def go_to_url(self, user_id: int, url: str, data: dict = None):
-        page = self.get_page(user_id, url, data)
+        page = await self.get_page(user_id, url, data)
         await models.UserDataclass.set_by_key(user_id, 'page_url', url)
         await self.update_to_page(page)
 
     async def go_to_last_url(self, user_id: int):
         await self.go_to_url(user_id, await self.get_last_url(user_id))
 
-    async def get_last_url(self, user_id: int):
+    async def get_last_url(self, user_id: int) -> str:
         return await models.UserDataclass.get_by_key(user_id, 'page_url')
 
     async def set_prev_state(self, user_id: int):

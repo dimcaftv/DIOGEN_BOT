@@ -17,6 +17,7 @@ class App:
         self.app_manager = AppManager(self)
 
     async def start(self):
+        await self.db.db.create_all_tables()
         await self.init_bot()
         await self.startup_actions()
         await self.bot.polling(non_stop=True, skip_pending=True)
@@ -40,4 +41,4 @@ class App:
 
     async def stop_actions(self):
         await self.set_bot_status(False)
-        self.db.commit()
+        await self.db.commit()

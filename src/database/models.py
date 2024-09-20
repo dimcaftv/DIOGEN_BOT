@@ -35,27 +35,27 @@ class UserDataclass:
 class AbstractModel:
     __tablename__ = ''
 
-    def save(self):
-        AppManager.get_db().save(self)
+    async def save(self):
+        await AppManager.get_db().save(self)
 
-    def delete(self):
-        AppManager.get_db().delete(self)
+    async def delete(self):
+        await AppManager.get_db().delete(self)
 
     @classmethod
-    def get(cls, *pks, session=None) -> Self:
+    async def get(cls, *pks, session=None) -> Self:
         if session is None:
             session = AppManager.get_db().selecting_session
-        return session.get(cls, pks)
+        return await session.get(cls, pks)
 
     @classmethod
-    def select(cls, *where, session=None):
+    async def select(cls, *where, session=None):
         if session is None:
-            return AppManager.get_db().exec(select(cls).where(*where))
-        return session.scalars(select(cls).where(*where))
+            session = AppManager.get_db().selecting_session
+        return await session.scalars(select(cls).where(*where))
 
     @classmethod
-    def delete_where(cls, *where, session=None):
-        session.execute(delete(cls).where(*where))
+    async def delete_where(cls, *where, session=None):
+        await session.execute(delete(cls).where(*where))
 
 
 class UserModel(AbstractModel):

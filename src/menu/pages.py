@@ -26,9 +26,10 @@ class GroupListPage(AbsMenuPage):
     state = states.BotPagesStates.GROUPLIST
     urlpath = 'grouplist'
 
-    def get_items(self) -> list[MenuItem]:
-        self.groups = models.UserModel.get(self.user_id).groups
+    async def post_init(self):
+        self.groups = (await models.UserModel.get(self.user_id)).groups
 
+    def get_items(self) -> list[MenuItem]:
         return KeyboardLayout(
                 (MenuItem(g.name, TransferAction('group', {'group': g.id}))
                  for g in self.groups),
@@ -47,8 +48,10 @@ class GroupPage(AbsMenuPage):
     state = states.BotPagesStates.GROUP
     urlpath = 'group'
 
+    async def post_init(self):
+        self.group = await models.GroupModel.get(self.query_data['group'])
+
     def get_items(self) -> list[MenuItem]:
-        self.group = models.GroupModel.get(self.query_data['group'])
         is_admin = self.group.is_group_admin(self.user_id)
         group_id = self.group.id
 
@@ -75,10 +78,11 @@ class TimetablePage(AbsMenuPage):
     state = states.BotPagesStates.TIMETABLE
     urlpath = 'timetable'
 
-    def get_items(self) -> list[MenuItem]:
-        self.group = models.GroupModel.get(self.query_data['group'])
+    async def post_init(self):
+        self.group = await models.GroupModel.get(self.query_data['group'])
         self.week = Week.from_str(self.query_data['week']) if 'week' in self.query_data else Week.today()
 
+    def get_items(self) -> list[MenuItem]:
         is_admin = self.group.is_group_admin(self.user_id)
         group_id = self.group.id
 
@@ -105,17 +109,17 @@ class DayPage(AbsMenuPage):
     state = states.BotPagesStates.DAY
     urlpath = 'daypage'
 
-    def get_items(self) -> list[MenuItem]:
-        self.group = models.GroupModel.get(self.query_data['group'])
+    async def post_init(self):
+        self.group = await models.GroupModel.get(self.query_data['group'])
         self.date = date.fromisoformat(self.query_data['date'])
+        self.lessons = (await models.LessonModel.select(models.LessonModel.date == self.date,
+                                                        models.LessonModel.group_id == self.group.id)).all()
 
-        lessons = models.LessonModel.select(models.LessonModel.date == self.date,
-                                            models.LessonModel.group_id == self.group.id).all()
-
+    def get_items(self) -> list[MenuItem]:
         return KeyboardLayout(
                 (MenuItem(i.name + ' ✅' * bool(i.solutions),
                           TransferAction('lesson', {'group': self.group.id, 'lesson_id': i.id}))
-                 for i in lessons),
+                 for i in self.lessons),
                 MenuItem.empty(),
                 MenuItem('◀ назад',
                          TransferAction('timetable',
@@ -130,9 +134,10 @@ class LessonPage(AbsMenuPage):
     state = states.BotPagesStates.LESSON
     urlpath = 'lesson'
 
-    def get_items(self) -> list[MenuItem]:
-        self.lesson = models.LessonModel.get(self.query_data['lesson_id'])
+    async def post_init(self):
+        self.lesson = await models.LessonModel.get(self.query_data['lesson_id'])
 
+    def get_items(self) -> list[MenuItem]:
         return KeyboardLayout(
                 (
                     MenuItem('🔍 посмотреть', ViewHomeworkAction(self.lesson.id)),
@@ -152,8 +157,10 @@ class UsersListPage(AbsMenuPage):
     state = states.BotPagesStates.USERSLIST
     urlpath = 'users_list'
 
+    async def post_init(self):
+        self.group = await models.GroupModel.get(self.query_data['group'])
+
     def get_items(self) -> list[MenuItem]:
-        self.group = models.GroupModel.get(self.query_data['group'])
         is_admin = self.group.is_group_admin(self.user_id)
 
         return KeyboardLayout(
@@ -171,8 +178,10 @@ class ActiveInvitesPage(AbsMenuPage):
     state = states.BotPagesStates.ACTIVE_INVITES
     urlpath = 'active_invites'
 
+    async def post_init(self):
+        self.group = await models.GroupModel.get(self.query_data['group'])
+
     def get_items(self) -> list[MenuItem]:
-        self.group = models.GroupModel.get(self.query_data['group'])
         return KeyboardLayout(
                 MenuItem('◀ назад', TransferAction('group', {'group': self.group.id}))
         )
