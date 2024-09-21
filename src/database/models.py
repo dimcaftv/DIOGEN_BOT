@@ -66,7 +66,8 @@ class UserModel(AbstractModel):
     fav_group_id: Mapped[int] = mapped_column(nullable=True)
 
     admin_in: Mapped[list['GroupModel']] = relationship(back_populates='admin', uselist=True)
-    groups: Mapped[list['GroupModel']] = relationship(back_populates='members', uselist=True, secondary="user_to_group")
+    groups: Mapped[list['GroupModel']] = relationship(back_populates='members', uselist=True, secondary="user_to_group",
+                                                      lazy='selectin')
     solutions: Mapped[list['SolutionModel']] = relationship(back_populates='author', uselist=True)
 
     async def get_tg_user(self):
@@ -82,9 +83,11 @@ class GroupModel(AbstractModel):
     admin: Mapped['UserModel'] = relationship(back_populates='admin_in', uselist=False)
     admin_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
 
-    members: Mapped[list['UserModel']] = relationship(back_populates='groups', uselist=True, secondary="user_to_group")
+    members: Mapped[list['UserModel']] = relationship(back_populates='groups', uselist=True, secondary="user_to_group",
+                                                      lazy='selectin')
     invites: Mapped[list['GroupInviteModel']] = relationship(back_populates='group', uselist=True,
-                                                             cascade='save-update,merge,delete,delete-orphan')
+                                                             cascade='save-update,merge,delete,delete-orphan',
+                                                             lazy='selectin')
     lessons: Mapped[list['LessonModel']] = relationship(back_populates='group', uselist=True,
                                                         cascade='save-update,merge,delete,delete-orphan')
 
@@ -104,7 +107,7 @@ class GroupInviteModel(AbstractModel):
 
     link: Mapped[str] = mapped_column(primary_key=True)
 
-    group: Mapped['GroupModel'] = relationship(back_populates='invites', uselist=False)
+    group: Mapped['GroupModel'] = relationship(back_populates='invites', uselist=False, lazy='selectin')
     group_id: Mapped[int] = mapped_column(ForeignKey('groups.id', ondelete='CASCADE'), nullable=False)
 
     remain_uses: Mapped[int] = mapped_column(default=1)
@@ -124,7 +127,8 @@ class LessonModel(AbstractModel):
     notes: Mapped[str] = mapped_column(nullable=True)
 
     solutions: Mapped[list['SolutionModel']] = relationship(back_populates='lesson', uselist=True,
-                                                            cascade='save-update,merge,delete,delete-orphan')
+                                                            cascade='save-update,merge,delete,delete-orphan',
+                                                            lazy='selectin')
 
 
 class SolutionModel(AbstractModel):

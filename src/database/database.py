@@ -92,4 +92,4 @@ class DatabaseInterface:
 
     @property
     def cnt_mng(self):
-        return self.db.sm().begin()
+        return self.db.sm.begin()

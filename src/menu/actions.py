@@ -161,7 +161,7 @@ class AskAction(Action):
         raise NotImplementedError
 
     async def message_handler(self, message: types.Message):
-        await ([self.wrong_data_handler, self.correct_data_handler][self.check(message)](message))
+        await ([self.wrong_data_handler, self.correct_data_handler][await self.check(message)](message))
 
     async def wrong_data_handler(self, message: types.Message):
         await AppManager.get_bot().send_message(message.chat.id, self.wrong_text)
@@ -272,6 +272,7 @@ class JoinGroupAction(AskAction):
 
     async def post_actions(self, user_id, message: types.Message):
         await AppManager.get_menu().go_to_url(user_id, f'group?group={self.join_group_id}')
+        await utils.delete_all_after_menu(user_id, message.id)
 
 
 class KickUserAction(AskAction):
@@ -401,5 +402,5 @@ class AddHomeworkAction(AskAction):
                                                             message.from_user.id,
                                                             message.id)).message_id
         async with AppManager.get_db().cnt_mng as s:
-            await s.add(models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution,
+            s.add(models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution,
                                              author_id=message.from_user.id, created=date.today()))
