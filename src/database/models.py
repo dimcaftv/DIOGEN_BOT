@@ -62,7 +62,7 @@ class UserModel(AbstractModel):
     __tablename__ = 'users'
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    username: Mapped[str] = mapped_column()
+    username: Mapped[str] = mapped_column(nullable=True)
     fav_group_id: Mapped[int] = mapped_column(nullable=True)
 
     admin_in: Mapped[list['GroupModel']] = relationship(back_populates='admin', uselist=True)

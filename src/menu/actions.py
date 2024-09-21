@@ -42,7 +42,10 @@ class TransferAction(Action):
         return self.url
 
     async def do(self, query: types.CallbackQuery):
-        await AppManager.get_menu().go_to_url(query.from_user.id, self.url)
+        try:
+            await AppManager.get_menu().go_to_url(query.from_user.id, self.url)
+        except:
+            await AppManager.get_menu().go_to_url(query.from_user.id, 'main')
 
 
 class DeleteGroupAction(Action):
@@ -293,9 +296,7 @@ class KickUserAction(AskAction):
         return int(message.text.removeprefix('/'))
 
     async def check(self, message: types.Message) -> bool:
-        text = message.text
-        if text[0] == '/':
-            text = text.removeprefix('/')
+        text = message.text.removeprefix('/')
         if not text.isdecimal():
             return False
         users = len((await models.GroupModel.get(self.group_id)).members)
@@ -305,13 +306,17 @@ class KickUserAction(AskAction):
         await super().do(query)
         members = (await models.GroupModel.get(self.group_id)).members
         await AppManager.get_menu().edit_menu_msg(query.from_user.id,
-                                                  '\n'.join(f'/{i}: {u.username}' for i, u in
+                                                  '\n'.join(f'/{i}: {(u.username or str(u.id))}' for i, u in
                                                             enumerate(members, start=1)))
 
     async def process_data(self, user_id, data):
         async with AppManager.get_db().cnt_mng as s:
             group = await models.GroupModel.get(self.group_id, session=s)
             u = group.members.pop(data - 1)
+            if not group.members:
+                await s.delete(group)
+                await models.UserDataclass.set_by_key(user_id, 'page_url', 'grouplist')
+                return
             if u.id == user_id:
                 from random import choice
                 group.admin = choice(group.members)
