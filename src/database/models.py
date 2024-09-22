@@ -144,3 +144,5 @@ class SolutionModel(AbstractModel):
     author: Mapped['UserModel'] = relationship(back_populates='solutions', uselist=False)
     author_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     created: Mapped[date] = mapped_column(Date)
+
+    file_id: Mapped[str] = mapped_column(nullable=True)

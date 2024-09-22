@@ -41,7 +41,7 @@ class GroupListPage(AbsMenuPage):
         )
 
     def get_page_text(self) -> str:
-        return f'Список групп:\n' + '\n'.join(g.name for g in self.groups)
+        return f'Твои группы:\n' + '\n'.join(g.name for g in self.groups)
 
 
 class GroupPage(AbsMenuPage):
@@ -170,7 +170,7 @@ class UsersListPage(AbsMenuPage):
         )
 
     def get_page_text(self) -> str:
-        return (f'Участники {self.group.name}:\n' +
+        return (f'Участники {self.group.name}, #{len(self.group.members)}:\n' +
                 ', '.join((u.username or str(u.id)) for u in self.group.members))
 
 

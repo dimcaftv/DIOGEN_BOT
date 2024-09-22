@@ -1,9 +1,11 @@
 import abc
 from datetime import date, timedelta
+from itertools import groupby
 from urllib.parse import urlencode
 
 from sqlalchemy import or_
 from telebot import types
+from telebot.types import InputMediaPhoto
 
 import settings
 from app.app_manager import AppManager
@@ -104,14 +106,30 @@ class ViewHomeworkAction(Action):
         return str(self.lesson_id)
 
     async def do(self, query: types.CallbackQuery):
-        solutions = [s.msg_id for s in (await models.LessonModel.get(self.lesson_id)).solutions]
+        user_id = query.from_user.id
+        solutions = (await models.LessonModel.get(self.lesson_id)).solutions
         bot = AppManager.get_bot()
         if not solutions:
             await bot.answer_callback_query(query.id, 'На этот урок ничего нет', True)
             return
 
-        await bot.copy_messages(query.from_user.id, settings.MEDIA_STORAGE_TG_ID, solutions)
-        await bot.send_message(query.from_user.id, 'Назад - /back')
+        solutions.sort(key=lambda x: x.author_id)
+        i = 0
+        for _, author_sols in groupby(solutions, key=lambda x: x.author_id):
+            author_sols = list(author_sols)
+            i += 1
+            media_sols = [s for s in author_sols if s.file_id]
+            normis_sols = [s for s in author_sols if s.file_id is None]
+
+            media_groups = utils.sep_list(media_sols, 10)
+            if media_groups and len(media_groups[-1]) == 1:
+                normis_sols = media_groups.pop(-1) + normis_sols
+
+            await bot.send_message(user_id, f'Решение #{i}')
+            for g in media_groups:
+                await bot.send_media_group(user_id, [InputMediaPhoto(s.file_id) for s in g])
+            await bot.copy_messages(user_id, settings.MEDIA_STORAGE_TG_ID, sorted([s.msg_id for s in normis_sols]))
+        await bot.send_message(user_id, 'Назад - /back')
 
 
 class ViewRecentHomeworkAction(Action):
@@ -127,7 +145,7 @@ class ViewRecentHomeworkAction(Action):
     async def do(self, query: types.CallbackQuery):
         bot = AppManager.get_bot()
         lessons = (await models.LessonModel.select(or_(models.LessonModel.date == date.today(),
-                                                models.LessonModel.date == date.today() + timedelta(days=1)),
+                                                       models.LessonModel.date == date.today() + timedelta(days=1)),
                                                    models.LessonModel.group_id == self.group_id)).all()
         for l in lessons:
             sols = l.solutions
@@ -359,7 +377,7 @@ class CreateTimetableAction(AskAction):
         async with AppManager.get_db().cnt_mng as s:
             for d, t in zip(self.week, timetable):
                 await models.LessonModel.delete_where(models.LessonModel.date == d,
-                                                models.LessonModel.group_id == self.group_id, session=s)
+                                                      models.LessonModel.group_id == self.group_id, session=s)
                 if t[0] == '-':
                     continue
                 for l in t:
@@ -376,7 +394,7 @@ class AddHomeworkAction(AskAction):
 
     def __init__(self, full_data):
         super().__init__(
-                'Отправь сюда сколько можешь сообщений дз и напиши /stop\nТолько не скидывай несколько фотографий одним сообщением, я еще это не пофиксил',
+                'Отправь сюда сколько можешь сообщений дз и напиши /stop\nЕсли отправляешь много фоток за раз, то проверь, что все дошли.',
                 'Сохраняю...'
         )
         self.lesson_id = int(full_data)
@@ -403,9 +421,13 @@ class AddHomeworkAction(AskAction):
         await AppManager.get_menu().set_prev_state(user_id)
 
     async def correct_data_handler(self, message: types.Message):
-        solution = (await AppManager.get_bot().copy_message(settings.MEDIA_STORAGE_TG_ID,
-                                                            message.from_user.id,
-                                                            message.id)).message_id
+        solution = await AppManager.get_bot().copy_message(settings.MEDIA_STORAGE_TG_ID,
+                                                           message.from_user.id,
+                                                           message.id)
+        file_id = None
+        if message.photo:
+            file_id = message.photo[-1].file_id
         async with AppManager.get_db().cnt_mng as s:
-            s.add(models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution,
-                                             author_id=message.from_user.id, created=date.today()))
+            s.add(models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution.message_id,
+                                       author_id=message.from_user.id, created=date.today(),
+                                       file_id=file_id))

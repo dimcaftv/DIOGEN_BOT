@@ -28,7 +28,8 @@ async def delete_messages_range(user_id, from_id, to_id):
     for i in range(math.ceil(l / 100)):
         try:
             asyncio.create_task(
-                bot.delete_messages(user_id, list(range(from_id + i * 100, min(from_id + (i + 1) * 100, to_id + 1)))))
+                    bot.delete_messages(user_id,
+                                        list(range(from_id + i * 100, min(from_id + (i + 1) * 100, to_id + 1)))))
         except:
             pass
 
@@ -36,3 +37,10 @@ async def delete_messages_range(user_id, from_id, to_id):
 async def delete_all_after_menu(user_id, last_id):
     menu_id = await models.UserDataclass.get_by_key(user_id, 'menu_msg_id')
     await delete_messages_range(user_id, menu_id + 1, last_id)
+
+
+def sep_list(l: list, n: int):
+    res = []
+    for i in range(0, len(l), n):
+        res.append(l[i:i + n])
+    return res

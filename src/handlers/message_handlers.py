@@ -8,6 +8,7 @@ from database import models
 from menu.actions import TransferAction
 from messages import messages
 from utils import utils
+from utils.commands import FullCommand
 
 
 async def start_cmd_handler(message: types.Message, bot: AsyncTeleBot):
@@ -53,9 +54,9 @@ async def asker_handler(message: types.Message, bot: AsyncTeleBot):
     await menu.get_action(asker_url).message_handler(message)
 
 
-def register_handlers(bot: AsyncTeleBot, cmd_handlers, kwargs_handlers):
-    for cb, cmd in cmd_handlers:
-        bot.register_message_handler(cb, commands=[cmd], pass_bot=True)
+def register_handlers(bot: AsyncTeleBot, cmd_handlers: list[FullCommand], kwargs_handlers):
+    for cmd in cmd_handlers:
+        bot.register_message_handler(cmd.handler, commands=[cmd.name], pass_bot=True)
 
     for cb, kw in kwargs_handlers:
         bot.register_message_handler(cb, **kw, pass_bot=True)

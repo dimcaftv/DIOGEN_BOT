@@ -28,7 +28,7 @@ class App:
         self.bot.current_states = self.db.dynamic_user_data.storage.storage
 
     async def register_bot_handlers(self):
-        message_handlers.register_handlers(self.bot, settings.cmd_handlers, settings.kwargs_handlers)
+        message_handlers.register_handlers(self.bot, settings.commands_list, settings.kwargs_handlers)
         callback_handlers.register_handlers(self.bot, settings.callbacks_handlers)
         filters.register_filters(self.bot, settings.bot_filters)
         await commands.register_commands(self.bot, settings.commands_list)
