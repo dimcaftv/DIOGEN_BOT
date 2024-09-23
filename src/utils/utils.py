@@ -1,8 +1,13 @@
 import asyncio
 import math
+from itertools import groupby
 from types import FunctionType
 from uuid import uuid4
 
+from telebot import types
+from telebot.types import InputMediaPhoto
+
+import settings
 from app.app_manager import AppManager
 from database import models
 
@@ -44,3 +49,28 @@ def sep_list(l: list, n: int):
     for i in range(0, len(l), n):
         res.append(l[i:i + n])
     return res
+
+
+def is_msg_from_dm(message: types.Message):
+    return message.chat.type == 'private'
+
+
+async def send_solutions_with_albums(user_id: int, solutions: list['models.SolutionModel']):
+    solutions.sort(key=lambda x: x.author_id)
+    i = 0
+    for _, author_sols in groupby(solutions, key=lambda x: x.author_id):
+        author_sols = list(author_sols)
+        i += 1
+        media_sols = [s for s in author_sols if s.file_id]
+        normis_sols = [s for s in author_sols if s.file_id is None]
+
+        media_groups = sep_list(media_sols, 10)
+        if media_groups and len(media_groups[-1]) == 1:
+            normis_sols = media_groups.pop(-1) + normis_sols
+
+        bot = AppManager.get_bot()
+        await bot.send_message(user_id, f'📘 Решение #{i}')
+        for g in media_groups:
+            await bot.send_media_group(user_id, [InputMediaPhoto(s.file_id) for s in g])
+        if normis_sols:
+            await bot.copy_messages(user_id, settings.MEDIA_STORAGE_TG_ID, sorted([s.msg_id for s in normis_sols]))

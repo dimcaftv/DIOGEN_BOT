@@ -6,8 +6,9 @@ from telebot import asyncio_filters
 from telebot.util import content_type_media
 
 from handlers import callback_handlers, message_handlers
-from menu import actions, pages
-from utils import commands, states
+from menu import pages
+from menu.actions import actions, ask_actions
+from utils import commands, filters, states
 
 dotenv.load_dotenv('../.env')
 
@@ -28,15 +29,20 @@ callbacks_handlers: typing.List[typing.Tuple[typing.Callable, typing.Mapping]] =
 ]
 
 commands_list = [
-    commands.FullCommand('start', message_handlers.start_cmd_handler, 'запуск бота'),
-    commands.FullCommand('help', message_handlers.help_cmd_handler, 'показать помощь'),
-    commands.FullCommand('menu', message_handlers.menu_cmd_handler, 'открыть главное меню'),
+    commands.FullCommand('start', message_handlers.start_cmd_handler, 'запуск бота', isdm=True),
+    commands.FullCommand('help', message_handlers.help_cmd_handler, 'показать помощь', isdm=True),
+    commands.FullCommand('menu', message_handlers.menu_cmd_handler, 'открыть главное меню', isdm=True),
     commands.FullCommand('back', message_handlers.back_cmd_handler,
-                         'отменить текущее действие или удалить лишние сообщения'),
+                         'отменить текущее действие или удалить лишние сообщения', isdm=True),
+    commands.FullCommand('addchat', message_handlers.addchat_cmd_handler,
+                         'добавить эту группу для отправки уведомлений (напиши код приглашения в группу через пробел)',
+                         isdm=False, is_chat_admin=True),
 ]
 
 bot_filters = [
-    asyncio_filters.StateFilter
+    asyncio_filters.StateFilter,
+    filters.InDmFilter,
+    asyncio_filters.IsAdminFilter
 ]
 
 pages_list = [
@@ -47,19 +53,23 @@ pages_list = [
     pages.DayPage,
     pages.LessonPage,
     pages.UsersListPage,
-    pages.ActiveInvitesPage
+    pages.ActiveInvitesPage,
+    pages.GroupSettingsPage
 ]
 
 actions_list = [
     actions.TransferAction,
-    actions.CreateGroupAction,
     actions.DeleteGroupAction,
-    actions.CreateInviteAction,
-    actions.JoinGroupAction,
-    actions.KickUserAction,
-    actions.CreateTimetableAction,
     actions.CopyPrevTimetableAction,
     actions.ViewHomeworkAction,
-    actions.AddHomeworkAction,
-    actions.ViewRecentHomeworkAction
+    actions.ViewRecentHomeworkAction,
+    actions.FlipNotifyAction,
+    ask_actions.CreateGroupAction,
+    ask_actions.CreateInviteAction,
+    ask_actions.JoinGroupAction,
+    ask_actions.KickUserAction,
+    ask_actions.CreateTimetableAction,
+    ask_actions.AddHomeworkAction,
+    ask_actions.ChangeGroupAdminAction,
+    ask_actions.ChangeNotifyTemplateAction
 ]

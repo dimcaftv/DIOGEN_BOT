@@ -1,202 +1,14 @@
-import abc
-from datetime import date, timedelta
-from itertools import groupby
-from urllib.parse import urlencode
+from datetime import date
 
-from sqlalchemy import or_
 from telebot import types
-from telebot.types import InputMediaPhoto
 
 import settings
 from app.app_manager import AppManager
 from database import models
-from utils import states, utils
+from menu.actions import AskAction
+from messages import messages
+from utils import utils
 from utils.calendar import Week
-
-
-class Action(abc.ABC):
-    key: str = ''
-    take_params: bool = False
-
-    @abc.abstractmethod
-    async def do(self, query: types.CallbackQuery):
-        raise NotImplementedError
-
-    def get_url_params(self):
-        return ''
-
-    def get_url(self):
-        return self.key + ':' + self.get_url_params()
-
-
-class TransferAction(Action):
-    key = 'transfer'
-    take_params = True
-
-    def __init__(self, base_url: str = 'main', data: dict = None, full_data: str = None):
-        data = data or {}
-        if full_data:
-            self.url = full_data
-        else:
-            self.url = base_url + '?' + urlencode(data)
-
-    def get_url_params(self):
-        return self.url
-
-    async def do(self, query: types.CallbackQuery):
-        try:
-            await AppManager.get_menu().go_to_url(query.from_user.id, self.url)
-        except:
-            await AppManager.get_menu().go_to_url(query.from_user.id, 'main')
-
-
-class DeleteGroupAction(Action):
-    key = 'delete_group'
-    take_params = True
-
-    def __init__(self, full_data):
-        self.group_id = int(full_data)
-
-    async def do(self, query: types.CallbackQuery):
-        async with AppManager.get_db().cnt_mng as s:
-            await s.delete(await models.GroupModel.get(self.group_id, session=s))
-        await AppManager.get_menu().go_to_url(query.from_user.id, 'grouplist')
-
-    def get_url_params(self):
-        return str(self.group_id)
-
-
-class CopyPrevTimetableAction(Action):
-    key = 'copy_prev_timetable'
-    take_params = True
-
-    def __init__(self, group_id=None, week=None, full_data: str = None):
-        if full_data:
-            part = full_data.split('&')
-            self.group_id = int(part[0])
-            self.week = Week.from_str(part[1])
-        else:
-            self.group_id = group_id
-            self.week = week
-
-    def get_url_params(self):
-        return str(self.group_id) + '&' + str(self.week)
-
-    async def do(self, query: types.CallbackQuery):
-        pweek = self.week.prev()
-        lessons = []
-        async with AppManager.get_db().cnt_mng as s:
-            for d1, d2 in zip(pweek, self.week):
-                await models.LessonModel.delete_where(models.LessonModel.date == d2,
-                                                      models.LessonModel.group_id == self.group_id, session=s)
-                for l in (await models.LessonModel.select(models.LessonModel.date == d1,
-                                                          models.LessonModel.group_id == self.group_id)).all():
-                    lessons.append(models.LessonModel(date=d2, group_id=self.group_id, name=l.name))
-            s.add_all(lessons)
-
-
-class ViewHomeworkAction(Action):
-    key = 'view_homework'
-    take_params = True
-
-    def __init__(self, full_data=None):
-        self.lesson_id = int(full_data)
-
-    def get_url_params(self):
-        return str(self.lesson_id)
-
-    async def do(self, query: types.CallbackQuery):
-        user_id = query.from_user.id
-        solutions = (await models.LessonModel.get(self.lesson_id)).solutions
-        bot = AppManager.get_bot()
-        if not solutions:
-            await bot.answer_callback_query(query.id, 'На этот урок ничего нет', True)
-            return
-
-        solutions.sort(key=lambda x: x.author_id)
-        i = 0
-        for _, author_sols in groupby(solutions, key=lambda x: x.author_id):
-            author_sols = list(author_sols)
-            i += 1
-            media_sols = [s for s in author_sols if s.file_id]
-            normis_sols = [s for s in author_sols if s.file_id is None]
-
-            media_groups = utils.sep_list(media_sols, 10)
-            if media_groups and len(media_groups[-1]) == 1:
-                normis_sols = media_groups.pop(-1) + normis_sols
-
-            await bot.send_message(user_id, f'Решение #{i}')
-            for g in media_groups:
-                await bot.send_media_group(user_id, [InputMediaPhoto(s.file_id) for s in g])
-            await bot.copy_messages(user_id, settings.MEDIA_STORAGE_TG_ID, sorted([s.msg_id for s in normis_sols]))
-        await bot.send_message(user_id, 'Назад - /back')
-
-
-class ViewRecentHomeworkAction(Action):
-    key = 'view_recent_homework'
-    take_params = True
-
-    def __init__(self, full_data=None):
-        self.group_id = int(full_data)
-
-    def get_url_params(self):
-        return str(self.group_id)
-
-    async def do(self, query: types.CallbackQuery):
-        bot = AppManager.get_bot()
-        lessons = (await models.LessonModel.select(or_(models.LessonModel.date == date.today(),
-                                                       models.LessonModel.date == date.today() + timedelta(days=1)),
-                                                   models.LessonModel.group_id == self.group_id)).all()
-        for l in lessons:
-            sols = l.solutions
-            if not sols:
-                continue
-            await bot.send_message(query.from_user.id, f'📘 {l.name} {Week.standart_day_format(l.date)}')
-            await bot.copy_messages(query.from_user.id, settings.MEDIA_STORAGE_TG_ID, [s.msg_id for s in l.solutions])
-        await bot.send_message(query.from_user.id, 'Назад - /back')
-
-
-class AskAction(Action):
-    key = 'ask_action'
-
-    def __init__(self, ask_text: str, wrong_text: str):
-        self.ask_text = ask_text
-        self.wrong_text = wrong_text
-
-    async def check(self, message: types.Message) -> bool:
-        return True
-
-    @abc.abstractmethod
-    def extract_data(self, message: types.Message):
-        raise NotImplementedError
-
-    async def do(self, query: types.CallbackQuery):
-        bot = AppManager.get_bot()
-        await bot.send_message(query.message.chat.id, self.ask_text)
-
-        await bot.set_state(query.from_user.id, states.ActionStates.ASK)
-        await models.UserDataclass.set_by_key(query.from_user.id, 'asker_url', self.get_url())
-
-    @abc.abstractmethod
-    async def process_data(self, user_id, data):
-        raise NotImplementedError
-
-    async def message_handler(self, message: types.Message):
-        await ([self.wrong_data_handler, self.correct_data_handler][await self.check(message)](message))
-
-    async def wrong_data_handler(self, message: types.Message):
-        await AppManager.get_bot().send_message(message.chat.id, self.wrong_text)
-
-    async def correct_data_handler(self, message: types.Message):
-        user_id = message.from_user.id
-
-        await models.UserDataclass.set_by_key(user_id, 'asker_url', None)
-
-        await self.process_data(user_id, self.extract_data(message))
-        await self.post_actions(user_id, message)
-
-    async def post_actions(self, user_id, message: types.Message):
-        await utils.delete_all_after_menu(user_id, message.id)
 
 
 class CreateGroupAction(AskAction):
@@ -218,7 +30,8 @@ class CreateGroupAction(AskAction):
         async with AppManager.get_db().cnt_mng as s:
             u = await models.UserModel.get(user_id, session=s)
             g = models.GroupModel(name=data)
-            s.add_all([g, u])
+            sets = models.GroupSettings(group=g)
+            s.add_all([g, u, sets])
             g.admin = u
             g.members.append(u)
             if len(u.groups) == 1:
@@ -255,9 +68,6 @@ class CreateInviteAction(AskAction):
         async with AppManager.get_db().cnt_mng as s:
             s.add(models.GroupInviteModel(link=(await utils.generate_invite_link()), group_id=self.group_id,
                                           remain_uses=n))
-
-    async def post_actions(self, user_id, message: types.Message):
-        await AppManager.get_menu().return_to_prev_page(user_id, message.id)
 
 
 class JoinGroupAction(AskAction):
@@ -384,9 +194,6 @@ class CreateTimetableAction(AskAction):
                     lessons.append(models.LessonModel(date=d, group_id=self.group_id, name=l))
             s.add_all(lessons)
 
-    async def post_actions(self, user_id, message: types.Message):
-        await AppManager.get_menu().return_to_prev_page(user_id, message.id)
-
 
 class AddHomeworkAction(AskAction):
     key = 'add_homework'
@@ -412,13 +219,19 @@ class AddHomeworkAction(AskAction):
         pass
 
     async def wrong_data_handler(self, message: types.Message):
-        await super().wrong_data_handler(message)
         user_id = message.from_user.id
-        await utils.delete_all_after_menu(user_id, message.id + 1)
 
         await models.UserDataclass.set_by_key(user_id, 'asker_url', None)
+        await AppManager.get_menu().return_to_prev_page(user_id, message.id)
 
-        await AppManager.get_menu().set_prev_state(user_id)
+        lesson = await models.LessonModel.get(self.lesson_id)
+        settings = (await models.GroupModel.get(lesson.group_id)).settings
+        if settings.general_group_chat_id and settings.new_answer_notify:
+            await AppManager.get_bot().send_message(settings.general_group_chat_id,
+                                                    (
+                                                            settings.answer_notify_template or messages.default_notify_template)
+                                                    .format(lesson_name=lesson.name,
+                                                            date=Week.standart_day_format(lesson.date)))
 
     async def correct_data_handler(self, message: types.Message):
         solution = await AppManager.get_bot().copy_message(settings.MEDIA_STORAGE_TG_ID,
@@ -431,3 +244,74 @@ class AddHomeworkAction(AskAction):
             s.add(models.SolutionModel(lesson_id=self.lesson_id, msg_id=solution.message_id,
                                        author_id=message.from_user.id, created=date.today(),
                                        file_id=file_id))
+
+
+class ChangeGroupAdminAction(AskAction):
+    key = 'change_group_admin'
+    take_params = True
+
+    def __init__(self, full_data):
+        super().__init__(
+                'Введи номер участника, которому передашь админку',
+                'Этот номер не подходит'
+        )
+
+        self.group_id = int(full_data)
+
+    def get_url_params(self):
+        return str(self.group_id)
+
+    def extract_data(self, message: types.Message):
+        return int(message.text.removeprefix('/'))
+
+    async def check(self, message: types.Message) -> bool:
+        text = message.text.removeprefix('/')
+        if not text.isdecimal():
+            return False
+        users = len((await models.GroupModel.get(self.group_id)).members)
+        return 1 <= int(text) <= users
+
+    async def do(self, query: types.CallbackQuery):
+        await super().do(query)
+        members = (await models.GroupModel.get(self.group_id)).members
+        await AppManager.get_menu().edit_menu_msg(query.from_user.id,
+                                                  '\n'.join(f'/{i}: {(u.username or str(u.id))}' for i, u in
+                                                            enumerate(members, start=1)))
+
+    async def process_data(self, user_id, data):
+        async with AppManager.get_db().cnt_mng as s:
+            group = await models.GroupModel.get(self.group_id, session=s)
+            group.admin = group.members[data - 1]
+
+    async def post_actions(self, user_id, message: types.Message):
+        await utils.delete_all_after_menu(user_id, message.id)
+        await AppManager.get_menu().go_to_url(user_id, f'group?group={self.group_id}')
+
+
+class ChangeNotifyTemplateAction(AskAction):
+    key = 'change_notify_template'
+    take_params = True
+
+    def __init__(self, full_data):
+        super().__init__(
+                'Введи шаблон для сообщения, отправляемого при добавлении нового ответа в бота. В шаблоне можно использовать динамические параметры:\n'
+                '{lesson_name} - название урока\n'
+                '{date} - дата урока',
+                'чет не то'
+        )
+
+        self.group_id = int(full_data)
+
+    def get_url_params(self):
+        return str(self.group_id)
+
+    def extract_data(self, message: types.Message):
+        return message.text
+
+    async def check(self, message: types.Message) -> bool:
+        return bool(message.text)
+
+    async def process_data(self, user_id, data):
+        async with AppManager.get_db().cnt_mng as s:
+            settings = await models.GroupSettings.get(self.group_id, session=s)
+            settings.answer_notify_template = data

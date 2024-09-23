@@ -91,6 +91,10 @@ class GroupModel(AbstractModel):
     lessons: Mapped[list['LessonModel']] = relationship(back_populates='group', uselist=True,
                                                         cascade='save-update,merge,delete,delete-orphan')
 
+    settings: Mapped['GroupSettings'] = relationship(back_populates='group', uselist=False,
+                                                     cascade='save-update,merge,delete,delete-orphan',
+                                                     lazy='selectin')
+
     def is_group_admin(self, user_id: int) -> bool:
         return self.admin_id == user_id
 
@@ -146,3 +150,14 @@ class SolutionModel(AbstractModel):
     created: Mapped[date] = mapped_column(Date)
 
     file_id: Mapped[str] = mapped_column(nullable=True)
+
+
+class GroupSettings(AbstractModel):
+    __tablename__ = 'group_settings'
+
+    group: Mapped['GroupModel'] = relationship(back_populates='settings', uselist=False, lazy='selectin')
+    group_id: Mapped[int] = mapped_column(ForeignKey('groups.id', ondelete='CASCADE'), primary_key=True)
+
+    general_group_chat_id: Mapped[int] = mapped_column(nullable=True)
+    new_answer_notify: Mapped[bool] = mapped_column(default=False)
+    answer_notify_template: Mapped[str] = mapped_column(nullable=True)

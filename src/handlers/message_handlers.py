@@ -2,10 +2,11 @@ import asyncio
 
 from telebot import types
 from telebot.async_telebot import AsyncTeleBot
+from telebot.util import extract_arguments
 
 from app.app_manager import AppManager
 from database import models
-from menu.actions import TransferAction
+from menu.actions.actions import TransferAction
 from messages import messages
 from utils import utils
 from utils.commands import FullCommand
@@ -48,6 +49,22 @@ async def back_cmd_handler(message: types.Message, bot: AsyncTeleBot):
     await AppManager.get_menu().return_to_prev_page(user_id, message.id)
 
 
+async def addchat_cmd_handler(message: types.Message, bot: AsyncTeleBot):
+    link = extract_arguments(message.text)
+    if not link:
+        await bot.send_message(message.chat.id, 'Напиши код приглашения в группу после команды через пробел')
+        return
+
+    async with AppManager.get_db().cnt_mng as s:
+        invite = await models.GroupInviteModel.get(link, session=s)
+        if invite is None:
+            await bot.send_message(message.chat.id, 'такого приглашения нет')
+            return
+        invite.group.settings.general_group_chat_id = message.chat.id
+        gname = invite.group.name
+    await bot.send_message(message.chat.id, f'Этот чат теперь прикреплен к "{gname}"')
+
+
 async def asker_handler(message: types.Message, bot: AsyncTeleBot):
     menu = AppManager.get_menu()
     asker_url = await models.UserDataclass.get_by_key(message.from_user.id, 'asker_url')
@@ -56,7 +73,7 @@ async def asker_handler(message: types.Message, bot: AsyncTeleBot):
 
 def register_handlers(bot: AsyncTeleBot, cmd_handlers: list[FullCommand], kwargs_handlers):
     for cmd in cmd_handlers:
-        bot.register_message_handler(cmd.handler, commands=[cmd.name], pass_bot=True)
+        bot.register_message_handler(cmd.handler, commands=[cmd.name], **cmd.kwargs, pass_bot=True)
 
     for cb, kw in kwargs_handlers:
         bot.register_message_handler(cb, **kw, pass_bot=True)

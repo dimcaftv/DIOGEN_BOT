@@ -10,6 +10,7 @@ class BotPagesStates(StatesGroup):
     LESSON = State()
     USERSLIST = State()
     ACTIVE_INVITES = State()
+    GROUP_SETTINGS = State()
 
 
 class ActionStates(StatesGroup):

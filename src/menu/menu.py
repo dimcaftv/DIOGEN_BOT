@@ -4,9 +4,9 @@ from urllib.parse import parse_qs, urlparse
 
 from telebot import types
 
+import menu.actions
 from app.app_manager import AppManager
 from database import models
-from menu import actions
 from utils import states, utils
 
 
@@ -15,7 +15,7 @@ class MenuItem:
     def empty(cls):
         return cls(' ', None)
 
-    def __init__(self, text: str, action: actions.Action, admin_only=False):
+    def __init__(self, text: str, action: menu.actions.Action, admin_only=False):
         self.text = text
         self.action = action
         self.admin_only = admin_only
@@ -79,7 +79,7 @@ class AbsMenuPage(abc.ABC):
 
 class Menu:
     def __init__(self, pages: list[type[AbsMenuPage]] = None,
-                 actions_list: list[type[actions.Action]] = None):
+                 actions_list: list[type[menu.actions.Action]] = None):
         self.pages = {p.urlpath: p for p in pages} if pages else {}
         self.actions = {a.key: a for a in actions_list} if actions_list else {}
 
@@ -87,7 +87,6 @@ class Menu:
         user_id = page.user_id
         await AppManager.get_bot().set_state(user_id, page.state)
         await self.edit_menu_msg(user_id, **page.get_message_kw())
-        # asyncio.create_task(self.edit_menu_msg(user_id, **page.get_message_kw()))
 
     async def edit_menu_msg(self, user_id, text, reply_markup=None):
         menu_id = await models.UserDataclass.get_by_key(user_id, 'menu_msg_id')
@@ -101,7 +100,7 @@ class Menu:
                 reply_markup=reply_markup
         )
 
-    def get_action(self, callback_data: str) -> actions.Action:
+    def get_action(self, callback_data: str) -> menu.actions.Action:
         part = callback_data.partition(':')
         action = self.actions[part[0]]
         if action.take_params and part[2]:

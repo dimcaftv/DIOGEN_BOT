@@ -5,10 +5,11 @@ from telebot.async_telebot import AsyncTeleBot
 
 
 class FullCommand:
-    def __init__(self, name: str, handler: Callable, help: str):
+    def __init__(self, name: str, handler: Callable, help: str, **kwargs):
         self.name = name
         self.handler = handler
         self.help = help
+        self.kwargs = kwargs
 
     def __str__(self):
         return f'/{self.name} - {self.help}'

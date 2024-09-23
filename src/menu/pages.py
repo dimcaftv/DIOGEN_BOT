@@ -1,10 +1,15 @@
 from datetime import date
 
 from database import models
-from menu.actions import (AddHomeworkAction, CopyPrevTimetableAction, CreateGroupAction, CreateInviteAction,
-                          CreateTimetableAction, DeleteGroupAction, JoinGroupAction, KickUserAction, TransferAction,
-                          ViewHomeworkAction, ViewRecentHomeworkAction)
+from menu.actions.actions import (CopyPrevTimetableAction, DeleteGroupAction, FlipNotifyAction, TransferAction,
+                                  ViewHomeworkAction, ViewRecentHomeworkAction)
+from menu.actions.ask_actions import (AddHomeworkAction, ChangeGroupAdminAction, ChangeNotifyTemplateAction,
+                                      CreateGroupAction, CreateInviteAction,
+                                      CreateTimetableAction,
+                                      JoinGroupAction,
+                                      KickUserAction)
 from menu.menu import AbsMenuPage, KeyboardLayout, MenuItem
+from messages import messages
 from utils import states
 from utils.calendar import Week
 
@@ -13,7 +18,7 @@ class MainPage(AbsMenuPage):
     state = states.BotPagesStates.MAIN
     urlpath = 'main'
 
-    def get_items(self) -> list[MenuItem]:
+    def get_items(self) -> KeyboardLayout:
         return KeyboardLayout(
                 MenuItem('группы', TransferAction('grouplist'))
         )
@@ -29,7 +34,7 @@ class GroupListPage(AbsMenuPage):
     async def post_init(self):
         self.groups = (await models.UserModel.get(self.user_id)).groups
 
-    def get_items(self) -> list[MenuItem]:
+    def get_items(self) -> KeyboardLayout:
         return KeyboardLayout(
                 (MenuItem(g.name, TransferAction('group', {'group': g.id}))
                  for g in self.groups),
@@ -51,7 +56,7 @@ class GroupPage(AbsMenuPage):
     async def post_init(self):
         self.group = await models.GroupModel.get(self.query_data['group'])
 
-    def get_items(self) -> list[MenuItem]:
+    def get_items(self) -> KeyboardLayout:
         is_admin = self.group.is_group_admin(self.user_id)
         group_id = self.group.id
 
@@ -65,6 +70,7 @@ class GroupPage(AbsMenuPage):
                     MenuItem('💾 создать приглашение', CreateInviteAction(group_id), True),
                     MenuItem('🎟 Активные приглашения', TransferAction('active_invites', {'group': group_id}), True),
                 ),
+                MenuItem('⚙️ Настройки', TransferAction('group_settings', {'group': group_id}), True),
                 MenuItem('❌ удалить', DeleteGroupAction(group_id), True),
                 MenuItem('◀ назад', TransferAction('grouplist')),
                 is_admin=is_admin
@@ -82,7 +88,7 @@ class TimetablePage(AbsMenuPage):
         self.group = await models.GroupModel.get(self.query_data['group'])
         self.week = Week.from_str(self.query_data['week']) if 'week' in self.query_data else Week.today()
 
-    def get_items(self) -> list[MenuItem]:
+    def get_items(self) -> KeyboardLayout:
         is_admin = self.group.is_group_admin(self.user_id)
         group_id = self.group.id
 
@@ -115,7 +121,7 @@ class DayPage(AbsMenuPage):
         self.lessons = (await models.LessonModel.select(models.LessonModel.date == self.date,
                                                         models.LessonModel.group_id == self.group.id)).all()
 
-    def get_items(self) -> list[MenuItem]:
+    def get_items(self) -> KeyboardLayout:
         return KeyboardLayout(
                 (MenuItem(i.name + ' ✅' * bool(i.solutions),
                           TransferAction('lesson', {'group': self.group.id, 'lesson_id': i.id}))
@@ -137,7 +143,7 @@ class LessonPage(AbsMenuPage):
     async def post_init(self):
         self.lesson = await models.LessonModel.get(self.query_data['lesson_id'])
 
-    def get_items(self) -> list[MenuItem]:
+    def get_items(self) -> KeyboardLayout:
         return KeyboardLayout(
                 (
                     MenuItem('🔍 посмотреть', ViewHomeworkAction(self.lesson.id)),
@@ -160,7 +166,7 @@ class UsersListPage(AbsMenuPage):
     async def post_init(self):
         self.group = await models.GroupModel.get(self.query_data['group'])
 
-    def get_items(self) -> list[MenuItem]:
+    def get_items(self) -> KeyboardLayout:
         is_admin = self.group.is_group_admin(self.user_id)
 
         return KeyboardLayout(
@@ -181,7 +187,7 @@ class ActiveInvitesPage(AbsMenuPage):
     async def post_init(self):
         self.group = await models.GroupModel.get(self.query_data['group'])
 
-    def get_items(self) -> list[MenuItem]:
+    def get_items(self) -> KeyboardLayout:
         return KeyboardLayout(
                 MenuItem('◀ назад', TransferAction('group', {'group': self.group.id}))
         )
@@ -190,3 +196,26 @@ class ActiveInvitesPage(AbsMenuPage):
         return (f'Приглашения для группы {self.group.name}:\n' +
                 '\n'.join(f'{i.link} - Осталось использований: {i.remain_uses}'
                           for i in self.group.invites))
+
+
+class GroupSettingsPage(AbsMenuPage):
+    state = states.BotPagesStates.GROUP_SETTINGS
+    urlpath = 'group_settings'
+
+    async def post_init(self):
+        self.settings = await models.GroupSettings.get(self.query_data['group'])
+
+    def get_items(self) -> KeyboardLayout:
+        return KeyboardLayout(
+                MenuItem('Передать админку', ChangeGroupAdminAction(self.settings.group_id)),
+                MenuItem(f'Уведомления о новых ответах {["❌", "✅"][self.settings.new_answer_notify]}',
+                         FlipNotifyAction(self.settings.group_id)),
+                MenuItem('Изменить шаблон уведомления', ChangeNotifyTemplateAction(self.settings.group_id)),
+                MenuItem('◀ назад', TransferAction('group', {'group': self.settings.group_id}))
+        )
+
+    def get_page_text(self) -> str:
+        return (f'Настройки группы {self.settings.group.name}\n:'
+                f'Добавлен в общий чат: {["❌", "✅"][bool(self.settings.general_group_chat_id)]}\n'
+                f'Шаблон уведомления о новом ответе:\n'
+                f'"{self.settings.answer_notify_template or messages.default_notify_template}"')

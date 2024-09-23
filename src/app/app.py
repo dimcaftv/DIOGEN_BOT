@@ -3,7 +3,7 @@ from telebot.async_telebot import AsyncTeleBot
 import messages.messages
 import settings
 from app.app_manager import AppManager
-from database import database
+from database import database, models
 from handlers import callback_handlers, message_handlers
 from menu import menu
 from utils import commands, filters
@@ -37,6 +37,10 @@ class App:
         await self.bot.set_my_short_description(messages.messages.get_status_text(status))
 
     async def startup_actions(self):
+        async with self.db.cnt_mng as s:
+            for g in (await models.GroupModel.select(session=s)).all():
+                if not g.settings:
+                    s.add(models.GroupSettings(group=g))
         await self.set_bot_status(True)
 
     async def stop_actions(self):
