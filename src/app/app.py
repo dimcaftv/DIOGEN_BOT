@@ -1,9 +1,8 @@
 from telebot.async_telebot import AsyncTeleBot
 
-import messages.messages
 import settings
 from app.app_manager import AppManager
-from database import database, models
+from database import database
 from handlers import callback_handlers, message_handlers
 from menu import menu
 from utils import commands, filters
@@ -12,7 +11,7 @@ from utils import commands, filters
 class App:
     def __init__(self):
         self.bot = AsyncTeleBot(settings.BOT_TOKEN)
-        self.menu = menu.Menu(settings.pages_list, settings.actions_list)
+        self.menu = menu.Menu(settings.PagesUrls, settings.ActionsUrls)
         self.db = database.DatabaseInterface(settings.TMP_USER_DATA_PATH)
         self.app_manager = AppManager(self)
 
@@ -33,16 +32,8 @@ class App:
         filters.register_filters(self.bot, settings.bot_filters)
         await commands.register_commands(self.bot, settings.commands_list)
 
-    async def set_bot_status(self, status: bool):
-        await self.bot.set_my_short_description(messages.messages.get_status_text(status))
-
     async def startup_actions(self):
-        async with self.db.cnt_mng as s:
-            for g in (await models.GroupModel.select(session=s)).all():
-                if not g.settings:
-                    s.add(models.GroupSettings(group=g))
-        await self.set_bot_status(True)
+        pass
 
     async def stop_actions(self):
-        await self.set_bot_status(False)
         await self.db.commit()

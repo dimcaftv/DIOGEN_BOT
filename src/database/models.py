@@ -14,21 +14,18 @@ class UserDataclass:
     page_url: str = 'main'
     asker_url: str = ''
     menu_msg_id: int = 0
+    sent_hw: bool = False
 
     @classmethod
-    def get_keys(cls):
-        return list(cls.__dataclass_fields__.keys())
+    async def get_user(cls, user_id) -> Self:
+        return await AppManager.get_db().dynamic_user_data.get_user(user_id)
 
-    @classmethod
-    async def get_by_key(cls, user_id: int, key: str):
-        res = await AppManager.get_db().dynamic_user_data.get_by_key(user_id, key)
-        if res is None:
-            res = cls.__dataclass_fields__.get(key).default
-        return res
+    async def save(self, user_id):
+        await AppManager.get_db().dynamic_user_data.save_user(user_id, self)
 
-    @staticmethod
-    async def set_by_key(user_id: int, key: str, val):
-        await AppManager.get_db().dynamic_user_data.set_by_key(user_id, key, val)
+    def __setattr__(self, key, value):
+        super().__setattr__(key, value)
+        AppManager.get_db().dynamic_user_data.save_all_data()
 
 
 @as_declarative()

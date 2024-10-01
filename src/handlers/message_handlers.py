@@ -27,7 +27,8 @@ async def help_cmd_handler(message: types.Message, bot: AsyncTeleBot):
 async def menu_cmd_handler(message: types.Message, bot: AsyncTeleBot):
     user_id = message.from_user.id
     u = await models.UserModel.get(user_id)
-    mmid = await models.UserDataclass.get_by_key(user_id, 'menu_msg_id')
+
+    mmid = (await models.UserDataclass.get_user(user_id)).menu_msg_id
     if mmid == 0:
         mmid = message.id
     await utils.delete_messages_range(user_id, mmid, message.id)
@@ -35,7 +36,7 @@ async def menu_cmd_handler(message: types.Message, bot: AsyncTeleBot):
     ans = await bot.send_message(message.chat.id, 'Загрузка...')
 
     mmid = ans.id
-    await models.UserDataclass.set_by_key(user_id, 'menu_msg_id', mmid)
+    (await models.UserDataclass.get_user(user_id)).menu_msg_id = mmid
 
     url = 'main'
     if u.fav_group_id:
@@ -67,7 +68,7 @@ async def addchat_cmd_handler(message: types.Message, bot: AsyncTeleBot):
 
 async def asker_handler(message: types.Message, bot: AsyncTeleBot):
     menu = AppManager.get_menu()
-    asker_url = await models.UserDataclass.get_by_key(message.from_user.id, 'asker_url')
+    asker_url = (await models.UserDataclass.get_user(message.from_user.id)).asker_url
     await menu.get_action(asker_url).message_handler(message)
 
 

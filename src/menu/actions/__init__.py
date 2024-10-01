@@ -2,32 +2,46 @@ import abc
 
 from telebot import types
 
+import settings
 from app.app_manager import AppManager
 from database import models
+from menu import urls
 from utils import states
 
 
 class Action(abc.ABC):
-    key: str = ''
-    take_params: bool = False
+    def __init__(self, *args, query: str = '', **kwargs):
+        if query:
+            self.query_data = urls.extract_query_data(query)
+            self.query_init()
+        else:
+            self.args_init(*args, **kwargs)
+
+    def query_init(self):
+        pass
+
+    def args_init(self, *args, **kwargs):
+        pass
 
     @abc.abstractmethod
     async def do(self, query: types.CallbackQuery):
         raise NotImplementedError
 
-    def get_url_params(self):
-        return ''
-
     def get_url(self):
-        return self.key + ':' + self.get_url_params()
+        return urls.encode_url(settings.ActionsUrls(self.__class__).name, self.get_url_params())
+
+    def get_url_params(self) -> dict:
+        return {}
 
 
 class AskAction(Action):
-    key = 'ask_action'
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ask_text, self.wrong_text = self.get_asker_text()
 
-    def __init__(self, ask_text: str, wrong_text: str):
-        self.ask_text = ask_text
-        self.wrong_text = wrong_text
+    @staticmethod
+    def get_asker_text():
+        return '', ''
 
     async def check(self, message: types.Message) -> bool:
         return True
@@ -38,10 +52,10 @@ class AskAction(Action):
 
     async def do(self, query: types.CallbackQuery):
         bot = AppManager.get_bot()
-        await bot.send_message(query.message.chat.id, self.ask_text)
+        user_id = query.from_user.id
 
-        await bot.set_state(query.from_user.id, states.ActionStates.ASK)
-        await models.UserDataclass.set_by_key(query.from_user.id, 'asker_url', self.get_url())
+        await bot.send_message(user_id, self.ask_text)
+        await self.set_asker_state(user_id)
 
     @abc.abstractmethod
     async def process_data(self, user_id, data):
@@ -56,10 +70,14 @@ class AskAction(Action):
     async def correct_data_handler(self, message: types.Message):
         user_id = message.from_user.id
 
-        await models.UserDataclass.set_by_key(user_id, 'asker_url', None)
+        (await models.UserDataclass.get_user(user_id)).asker_url = None
 
         await self.process_data(user_id, self.extract_data(message))
-        await self.post_actions(user_id, message)
+        await self.post_actions(message)
 
-    async def post_actions(self, user_id, message: types.Message):
-        await AppManager.get_menu().return_to_prev_page(user_id, message.id)
+    async def post_actions(self, message: types.Message):
+        await AppManager.get_menu().return_to_prev_page(message.from_user.id, message.id)
+
+    async def set_asker_state(self, user_id):
+        await AppManager.get_bot().set_state(user_id, states.UserStates.ASK)
+        (await models.UserDataclass.get_user(user_id)).asker_url = self.get_url()

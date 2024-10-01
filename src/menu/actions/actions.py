@@ -1,5 +1,4 @@
 from datetime import date, timedelta
-from urllib.parse import urlencode
 
 from sqlalchemy import or_
 from telebot import types
@@ -9,21 +8,19 @@ from database import models
 from utils import utils
 from utils.calendar import Week
 from . import Action
+from ..urls import encode_url
 
 
 class TransferAction(Action):
-    key = 'transfer'
-    take_params = True
+    def query_init(self):
+        self.url = self.query_data['url']
 
-    def __init__(self, base_url: str = 'main', data: dict = None, full_data: str = None):
+    def args_init(self, base_url: str = 'main', data: dict = None):
         data = data or {}
-        if full_data:
-            self.url = full_data
-        else:
-            self.url = base_url + '?' + urlencode(data)
+        self.url = encode_url(base_url, data)
 
     def get_url_params(self):
-        return self.url
+        return {'url': self.url}
 
     async def do(self, query: types.CallbackQuery):
         try:
@@ -33,37 +30,17 @@ class TransferAction(Action):
             await AppManager.get_menu().go_to_url(query.from_user.id, 'main')
 
 
-class DeleteGroupAction(Action):
-    key = 'delete_group'
-    take_params = True
-
-    def __init__(self, full_data):
-        self.group_id = int(full_data)
-
-    async def do(self, query: types.CallbackQuery):
-        async with AppManager.get_db().cnt_mng as s:
-            await s.delete(await models.GroupModel.get(self.group_id, session=s))
-        await AppManager.get_menu().go_to_url(query.from_user.id, 'grouplist')
-
-    def get_url_params(self):
-        return str(self.group_id)
-
-
 class CopyPrevTimetableAction(Action):
-    key = 'copy_prev_timetable'
-    take_params = True
+    def query_init(self):
+        self.group_id = self.query_data['g']
+        self.week = Week.from_str(self.query_data['w'])
 
-    def __init__(self, group_id=None, week=None, full_data: str = None):
-        if full_data:
-            part = full_data.split('&')
-            self.group_id = int(part[0])
-            self.week = Week.from_str(part[1])
-        else:
-            self.group_id = group_id
-            self.week = week
+    def args_init(self, group_id, week):
+        self.group_id = group_id
+        self.week = week
 
     def get_url_params(self):
-        return str(self.group_id) + '&' + str(self.week)
+        return {'g': self.group_id, 'w': self.week}
 
     async def do(self, query: types.CallbackQuery):
         pweek = self.week.prev()
@@ -78,37 +55,15 @@ class CopyPrevTimetableAction(Action):
             s.add_all(lessons)
 
 
-class ViewHomeworkAction(Action):
-    key = 'view_homework'
-    take_params = True
-
-    def __init__(self, full_data=None):
-        self.lesson_id = int(full_data)
-
-    def get_url_params(self):
-        return str(self.lesson_id)
-
-    async def do(self, query: types.CallbackQuery):
-        user_id = query.from_user.id
-        solutions = (await models.LessonModel.get(self.lesson_id)).solutions
-        bot = AppManager.get_bot()
-        if not solutions:
-            await bot.answer_callback_query(query.id, 'На этот урок ничего нет', True)
-            return
-
-        await utils.send_solutions_with_albums(user_id, solutions)
-        await bot.send_message(user_id, 'Назад - /back')
-
-
 class ViewRecentHomeworkAction(Action):
-    key = 'view_recent_homework'
-    take_params = True
+    def query_init(self):
+        self.group_id = self.query_data['g']
 
-    def __init__(self, full_data=None):
-        self.group_id = int(full_data)
+    def args_init(self, group_id):
+        self.group_id = group_id
 
     def get_url_params(self):
-        return str(self.group_id)
+        return {'g': self.group_id}
 
     async def do(self, query: types.CallbackQuery):
         bot = AppManager.get_bot()
@@ -120,20 +75,20 @@ class ViewRecentHomeworkAction(Action):
             sols = l.solutions
             if not sols:
                 continue
-            await bot.send_message(user_id, f'📘 {l.name} {Week.standart_day_format(l.date)}')
+            await bot.send_message(user_id, f'📕 {l.name} {Week.standart_day_format(l.date)}')
             await utils.send_solutions_with_albums(user_id, sols)
         await bot.send_message(user_id, 'Назад - /back')
 
 
 class FlipNotifyAction(Action):
-    key = 'flip_notify'
-    take_params = True
+    def query_init(self):
+        self.group_id = self.query_data['g']
 
-    def __init__(self, full_data=None):
-        self.group_id = int(full_data)
+    def args_init(self, group_id):
+        self.group_id = group_id
 
     def get_url_params(self):
-        return str(self.group_id)
+        return {'g': self.group_id}
 
     async def do(self, query: types.CallbackQuery):
         async with AppManager.get_db().cnt_mng as s:

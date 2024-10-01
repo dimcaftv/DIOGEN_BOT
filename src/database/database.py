@@ -1,24 +1,19 @@
-from dataclasses import asdict
-
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from telebot.asyncio_storage import StatePickleStorage, StateStorageBase
+from telebot.asyncio_storage import StatePickleStorage
 
 import settings
 from . import models
 
 
 class PrivateChatStorageAdapter:
-    def __init__(self, storage: StateStorageBase):
+    def __init__(self, storage: StatePickleStorage):
         self.storage = storage
 
     async def set_default_state(self, user_id):
         if await self.storage.get_data(user_id, user_id) is None:
             await self.storage.set_state(user_id, user_id, 0)
-        async with self.get_cnt_mng_data(user_id) as data:
-            data.setdefault('page_url', 'main')
-            data.setdefault('asker_url', '')
-            data.setdefault('menu_msg_id', 0)
+        await self.set_data(user_id, 'user', models.UserDataclass())
 
     async def set_data(self, user_id, key, value):
         if await self.get_data(user_id, key) != value:
@@ -35,22 +30,23 @@ class PrivateChatStorageAdapter:
 
 
 class UserDataManager:
-    def __init__(self, storage: StateStorageBase):
+    def __init__(self, storage: StatePickleStorage):
         self.storage = PrivateChatStorageAdapter(storage)
 
     async def get_user(self, user_id: int):
-        data = await self.storage.get_user_data(user_id)
-        return models.UserDataclass(*[data[k] for k in models.UserDataclass.get_keys()])
+        return await self.get_by_key(user_id, 'user')
 
     async def save_user(self, user_id: int, user: models.UserDataclass):
-        async with self.storage.get_cnt_mng_data(user_id) as data:
-            data.update(asdict(user))
+        await self.set_by_key(user_id, 'user', user)
 
     async def get_by_key(self, user_id: int, key: str):
         return await self.storage.get_data(user_id, key)
 
     async def set_by_key(self, user_id: int, key: str, val):
         await self.storage.set_data(user_id, key, val)
+
+    def save_all_data(self):
+        self.storage.storage.update_data()
 
 
 class SQLDatabaseManager:

@@ -1,13 +1,14 @@
 import abc
+from enum import Enum
 from typing import Iterable
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 from telebot import types
 
-import menu.actions
 from app.app_manager import AppManager
 from database import models
 from utils import states, utils
+from . import actions, urls
 
 
 class MenuItem:
@@ -15,7 +16,7 @@ class MenuItem:
     def empty(cls):
         return cls(' ', None)
 
-    def __init__(self, text: str, action: menu.actions.Action, admin_only=False):
+    def __init__(self, text: str, action: actions.Action, admin_only=False):
         self.text = text
         self.action = action
         self.admin_only = admin_only
@@ -35,32 +36,19 @@ class KeyboardLayout:
 
 
 class AbsMenuPage(abc.ABC):
-    state: states.BotPagesStates = None
-    urlpath: str = None
-
     @classmethod
     async def ainit(cls, *args, **kwargs):
         self = cls(*args, **kwargs)
         await self.post_init()
         return self
 
-    def __init__(self, user_id: int, query: str, data: dict = None):
+    def __init__(self, user_id: int, query: str = '', data: dict = None):
         self.user_id = user_id
-        self.query_data = self.extract_data(query)
+        self.query_data = urls.extract_query_data(query)
         self.data = data if data else {}
 
     async def post_init(self):
         pass
-
-    def extract_data(self, query: str):
-        res = {}
-        for k, v in parse_qs(query).items():
-            if len(v) == 1:
-                v = v[0]
-                if v.isdigit():
-                    v = int(v)
-            res[k] = v
-        return res
 
     @abc.abstractmethod
     def get_items(self) -> KeyboardLayout:
@@ -78,19 +66,24 @@ class AbsMenuPage(abc.ABC):
 
 
 class Menu:
-    def __init__(self, pages: list[type[AbsMenuPage]] = None,
-                 actions_list: list[type[menu.actions.Action]] = None):
-        self.pages = {p.urlpath: p for p in pages} if pages else {}
-        self.actions = {a.key: a for a in actions_list} if actions_list else {}
+    def __init__(self, pages: type[Enum], actions: type[Enum]):
+        self.pages = pages
+        self.actions = actions
+
+    async def go_to_url(self, user_id: int, url: str, data: dict = None):
+        page = await self.get_page(user_id, url, data)
+        (await models.UserDataclass.get_user(user_id)).page_url = url
+        await self.update_to_page(page)
 
     async def update_to_page(self, page: AbsMenuPage):
         user_id = page.user_id
-        await AppManager.get_bot().set_state(user_id, page.state)
-        await self.edit_menu_msg(user_id, **page.get_message_kw())
-
-    async def edit_menu_msg(self, user_id, text, reply_markup=None):
-        menu_id = await models.UserDataclass.get_by_key(user_id, 'menu_msg_id')
-        await self.edit_msg(user_id, menu_id, text, reply_markup)
+        await self.set_menu_state(user_id)
+        try:
+            await self.edit_menu_msg(user_id, **page.get_message_kw())
+        except:
+            ans = await AppManager.get_bot().send_message(user_id, 'Загрузка...')
+            (await models.UserDataclass.get_user(user_id)).menu_msg_id = ans.id
+            await self.edit_menu_msg(user_id, **page.get_message_kw())
 
     async def edit_msg(self, user_id, msg_id, text, reply_markup=None):
         await AppManager.get_bot().edit_message_text(
@@ -100,35 +93,30 @@ class Menu:
                 reply_markup=reply_markup
         )
 
-    def get_action(self, callback_data: str) -> menu.actions.Action:
-        part = callback_data.partition(':')
-        action = self.actions[part[0]]
-        if action.take_params and part[2]:
-            return action(full_data=part[2])
-        return action()
-
-    def get_page_class(self, path) -> type[AbsMenuPage]:
-        return self.pages[path]
+    async def edit_menu_msg(self, user_id, text, reply_markup=None):
+        menu_id = (await models.UserDataclass.get_user(user_id)).menu_msg_id
+        await self.edit_msg(user_id, menu_id, text, reply_markup)
 
     async def get_page(self, user_id: int, url: str, data: dict = None) -> AbsMenuPage:
         parse = urlparse(url)
         return await self.get_page_class(parse.path).ainit(user_id, parse.query, data)
 
-    async def go_to_url(self, user_id: int, url: str, data: dict = None):
-        page = await self.get_page(user_id, url, data)
-        await models.UserDataclass.set_by_key(user_id, 'page_url', url)
-        await self.update_to_page(page)
+    def get_action(self, callback_data: str) -> actions.Action:
+        parse = urlparse(callback_data)
+        return self.get_action_class(parse.path)(query=parse.query)
+
+    def get_page_class(self, path) -> type[AbsMenuPage]:
+        return self.pages[path].value
+
+    def get_action_class(self, path) -> type[actions.Action]:
+        return self.actions[path].value
 
     async def go_to_last_url(self, user_id: int):
-        await self.go_to_url(user_id, await self.get_last_url(user_id))
-
-    async def get_last_url(self, user_id: int) -> str:
-        return await models.UserDataclass.get_by_key(user_id, 'page_url')
-
-    async def set_prev_state(self, user_id: int):
-        state = self.get_page_class(urlparse(await self.get_last_url(user_id)).path).state
-        await AppManager.get_bot().set_state(user_id, state)
+        await self.go_to_url(user_id, (await models.UserDataclass.get_user(user_id)).page_url)
 
     async def return_to_prev_page(self, user_id: int, last_msg_id: int):
-        await self.set_prev_state(user_id)
+        await self.set_menu_state(user_id)
         await utils.delete_all_after_menu(user_id, last_msg_id)
+
+    async def set_menu_state(self, user_id: int):
+        await AppManager.get_bot().set_state(user_id, states.UserStates.MENU)
