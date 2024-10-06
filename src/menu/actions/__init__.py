@@ -81,3 +81,29 @@ class AskAction(Action):
     async def set_asker_state(self, user_id):
         await AppManager.get_bot().set_state(user_id, states.UserStates.ASK)
         (await models.UserDataclass.get_user(user_id)).asker_url = self.get_url()
+
+
+class ChooseAction(AskAction):
+    @abc.abstractmethod
+    async def get_list(self) -> list:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_item_repr(self, item):
+        raise NotImplementedError
+
+    def extract_data(self, message: types.Message):
+        return int(message.text.removeprefix('/'))
+
+    async def check(self, message: types.Message) -> bool:
+        text = message.text.removeprefix('/')
+        if not text.isdecimal():
+            return False
+        l = len(await self.get_list())
+        return 1 <= int(text) <= l
+
+    async def do(self, query: types.CallbackQuery):
+        await super().do(query)
+        await AppManager.get_bot().send_message(query.from_user.id,
+                                                '\n'.join(f'/{i}: {self.get_item_repr(x)}' for i, x in
+                                                          enumerate((await self.get_list()), start=1)))

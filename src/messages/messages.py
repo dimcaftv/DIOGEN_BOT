@@ -4,6 +4,8 @@ start_cmd_text = 'Бот для удобного обмена ответами �
 
 default_notify_template = '‼️Ответ на "{lesson_name}" {date} только что отправили в бота‼️\n@diogen_help_bot'
 
+request_answer_template = '❔На урок "{lesson_name}" {date} попросили прислать ответ❔\n@diogen_help_bot'
+
 
 def get_help_cmd_text() -> str:
     cmd_help = '\n'.join(str(cmd) for cmd in settings.commands_list)

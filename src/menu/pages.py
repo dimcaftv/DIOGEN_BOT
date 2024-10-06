@@ -5,11 +5,11 @@ from messages import messages
 from utils.calendar import Week
 from .actions.actions import (CopyPrevTimetableAction, FlipNotifyAction, TransferAction,
                               ViewRecentHomeworkAction)
-from .actions.ask_actions import (AddHomeworkAction, ChangeGroupAdminAction, ChangeNotifyTemplateAction,
+from .actions.ask_actions import (ChangeGroupAdminAction, ChangeNotifyTemplateAction,
                                   CreateGroupAction, CreateInviteAction,
                                   CreateTimetableAction,
                                   DeleteGroupAction, JoinGroupAction,
-                                  KickUserAction, ViewHomeworkAction)
+                                  KickUserAction, RequestAnswerAction, ViewHomeworkAction)
 from .menu import AbsMenuPage, KeyboardLayout, MenuItem
 
 
@@ -108,6 +108,7 @@ class DayPage(AbsMenuPage):
                           ViewHomeworkAction(i.id))
                  for i in self.lessons),
                 MenuItem.empty(),
+                MenuItem('🥺 Попросить дз', RequestAnswerAction(self.group.id, self.date), visible=bool(self.lessons)),
                 MenuItem('◀ назад',
                          TransferAction('timetable',
                                         {'group': self.group.id, 'week': str(Week.from_day(self.date))}))
@@ -115,26 +116,6 @@ class DayPage(AbsMenuPage):
 
     def get_page_text(self) -> str:
         return f'Уроки на {Week.standart_day_format(self.date)}:'
-
-
-class LessonPage(AbsMenuPage):
-    async def post_init(self):
-        self.lesson = await models.LessonModel.get(self.query_data['lesson_id'])
-
-    def get_items(self) -> KeyboardLayout:
-        return KeyboardLayout(
-                (
-                    MenuItem('🔍 посмотреть', ViewHomeworkAction(self.lesson.id)),
-                    MenuItem('💾 добавить', AddHomeworkAction(self.lesson.id))
-                ),
-                MenuItem('◀ назад',
-                         TransferAction('daypage',
-                                        {'group': self.lesson.group_id, 'date': str(self.lesson.date)}))
-        )
-
-    def get_page_text(self) -> str:
-        return (f'"{self.lesson.name}" {Week.standart_day_format(self.lesson.date)}\n' +
-                (f'Доп. задание: {self.lesson.notes}' if self.lesson.notes else ''))
 
 
 class UsersListPage(AbsMenuPage):

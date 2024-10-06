@@ -16,10 +16,11 @@ class MenuItem:
     def empty(cls):
         return cls(' ', None)
 
-    def __init__(self, text: str, action: actions.Action, admin_only=False):
+    def __init__(self, text: str, action: actions.Action, admin_only=False, visible=True):
         self.text = text
         self.action = action
         self.admin_only = admin_only
+        self.visible = visible
 
 
 class KeyboardLayout:
@@ -31,7 +32,7 @@ class KeyboardLayout:
 
             r = [types.InlineKeyboardButton(text=b.text,
                                             callback_data=('-' if b.action is None else b.action.get_url()))
-                 for b in r if b.admin_only <= is_admin]
+                 for b in r if b.visible and b.admin_only <= is_admin]
             self.ik.add(*r)
 
 

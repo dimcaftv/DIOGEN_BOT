@@ -5,7 +5,7 @@ from telebot import types
 import settings
 from app.app_manager import AppManager
 from database import models
-from menu.actions import AskAction
+from menu.actions import AskAction, ChooseAction
 from messages import messages
 from utils import utils
 from utils.calendar import Week
@@ -101,11 +101,11 @@ class JoinGroupAction(AskAction):
         await utils.delete_all_after_menu(message.from_user.id, message.id)
 
 
-class KickUserAction(AskAction):
+class KickUserAction(ChooseAction):
     @staticmethod
     def get_asker_text():
         return ('Введи номер участника',
-                'Бро, введи нормальный ник')
+                'Бро, введи нормальный номер')
 
     def query_init(self):
         self.group_id = self.query_data['g']
@@ -116,22 +116,14 @@ class KickUserAction(AskAction):
     def get_url_params(self):
         return {'g': self.group_id}
 
+    async def get_list(self) -> list:
+        return (await models.GroupModel.get(self.group_id)).members
+
+    def get_item_repr(self, item):
+        return (item.username or str(item.id))
+
     def extract_data(self, message: types.Message):
         return int(message.text.removeprefix('/'))
-
-    async def check(self, message: types.Message) -> bool:
-        text = message.text.removeprefix('/')
-        if not text.isdecimal():
-            return False
-        users = len((await models.GroupModel.get(self.group_id)).members)
-        return 1 <= int(text) <= users
-
-    async def do(self, query: types.CallbackQuery):
-        await super().do(query)
-        members = (await models.GroupModel.get(self.group_id)).members
-        await AppManager.get_menu().edit_menu_msg(query.from_user.id,
-                                                  '\n'.join(f'/{i}: {(u.username or str(u.id))}' for i, u in
-                                                            enumerate(members, start=1)))
 
     async def process_data(self, user_id, data):
         async with AppManager.get_db().cnt_mng as s:
@@ -139,15 +131,15 @@ class KickUserAction(AskAction):
             u = group.members.pop(data - 1)
             if not group.members:
                 await s.delete(group)
-                (await models.UserDataclass.get_user(user_id)).page_url = 'grouplist'
+                (await models.UserDataclass.get_user(user_id)).page_url = settings.PagesUrls.grouplist.name
                 return
             if u.id == user_id:
                 from random import choice
                 group.admin = choice(group.members)
 
     async def post_actions(self, message: types.Message):
-        await AppManager.get_menu().go_to_last_url(message.from_user.id)
         await utils.delete_all_after_menu(message.from_user.id, message.id)
+        await AppManager.get_menu().go_to_last_url(message.from_user.id)
 
 
 class CreateTimetableAction(AskAction):
@@ -250,11 +242,11 @@ class AddHomeworkAction(AskAction):
             u.sent_hw = True
 
 
-class ChangeGroupAdminAction(AskAction):
+class ChangeGroupAdminAction(ChooseAction):
     @staticmethod
     def get_asker_text():
         return ('Введи номер участника, которому передашь админку',
-                'Этот номер не подходит')
+                'Неправильный номер')
 
     def query_init(self):
         self.group_id = self.query_data['g']
@@ -265,22 +257,11 @@ class ChangeGroupAdminAction(AskAction):
     def get_url_params(self):
         return {'g': self.group_id}
 
-    def extract_data(self, message: types.Message):
-        return int(message.text.removeprefix('/'))
+    async def get_list(self) -> list:
+        return (await models.GroupModel.get(self.group_id)).members
 
-    async def check(self, message: types.Message) -> bool:
-        text = message.text.removeprefix('/')
-        if not text.isdecimal():
-            return False
-        users = len((await models.GroupModel.get(self.group_id)).members)
-        return 1 <= int(text) <= users
-
-    async def do(self, query: types.CallbackQuery):
-        await super().do(query)
-        members = (await models.GroupModel.get(self.group_id)).members
-        await AppManager.get_menu().edit_menu_msg(query.from_user.id,
-                                                  '\n'.join(f'/{i}: {(u.username or str(u.id))}' for i, u in
-                                                            enumerate(members, start=1)))
+    def get_item_repr(self, item):
+        return (item.username or str(item.id))
 
     async def process_data(self, user_id, data):
         async with AppManager.get_db().cnt_mng as s:
@@ -340,7 +321,7 @@ class DeleteGroupAction(AskAction):
         return message.text
 
     async def check(self, message: types.Message) -> bool:
-        return message.text == 'да'
+        return message.text.lower() == 'да'
 
     async def wrong_data_handler(self, message: types.Message):
         await self.post_actions(message)
@@ -388,3 +369,38 @@ class ViewHomeworkAction(AskAction):
 
     async def process_data(self, user_id, data):
         pass
+
+
+class RequestAnswerAction(ChooseAction):
+    @staticmethod
+    def get_asker_text():
+        return ('Введи номер урока на который хочешь попросить ответы',
+                'Неправильный номер')
+
+    def query_init(self):
+        self.group_id = self.query_data['g']
+        self.date = date.fromisoformat(self.query_data['d'])
+
+    def args_init(self, group_id, date):
+        self.group_id = group_id
+        self.date = date
+
+    def get_url_params(self):
+        return {'g': self.group_id, 'd': self.date}
+
+    async def get_list(self) -> list:
+        return (await models.LessonModel.select(models.LessonModel.date == self.date,
+                                                models.LessonModel.group_id == self.group_id)).all()
+
+    def get_item_repr(self, item):
+        return item.name
+
+    async def process_data(self, user_id, data):
+        lessons = await self.get_list()
+        lesson = lessons[data - 1]
+        settings = (await models.GroupModel.get(self.group_id)).settings
+        if settings.general_group_chat_id:
+            await (AppManager.get_bot()
+                   .send_message(settings.general_group_chat_id, messages.request_answer_template
+                                 .format(lesson_name=lesson.name,
+                                         date=Week.standart_day_format(lesson.date))))

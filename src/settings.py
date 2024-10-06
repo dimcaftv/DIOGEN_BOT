@@ -53,7 +53,6 @@ class PagesUrls(Enum):
     group = pages.GroupPage
     timetable = pages.TimetablePage
     daypage = pages.DayPage
-    lesson = pages.LessonPage
     users_list = pages.UsersListPage
     group_settings = pages.GroupSettingsPage
     group_invites = pages.GroupInvitesPage
@@ -76,3 +75,4 @@ class ActionsUrls(Enum):
     add_homework = ask_actions.AddHomeworkAction
     change_group_admin = ask_actions.ChangeGroupAdminAction
     change_notify_template = ask_actions.ChangeNotifyTemplateAction
+    request_answer = ask_actions.RequestAnswerAction
