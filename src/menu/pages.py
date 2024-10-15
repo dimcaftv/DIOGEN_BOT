@@ -2,6 +2,7 @@ from datetime import date
 
 from database import models
 from messages import messages
+from utils import utils
 from utils.calendar import Week
 from .actions.actions import (CopyPrevTimetableAction, FlipNotifyAction, TransferAction,
                               ViewRecentHomeworkAction)
@@ -9,7 +10,7 @@ from .actions.ask_actions import (ChangeGroupAdminAction, ChangeNotifyTemplateAc
                                   CreateGroupAction, CreateInviteAction,
                                   CreateTimetableAction,
                                   DeleteGroupAction, JoinGroupAction,
-                                  KickUserAction, RequestAnswerAction, ViewHomeworkAction)
+                                  KickUserAction, RenameGroupAction, RequestAnswerAction, ViewHomeworkAction)
 from .menu import AbsMenuPage, KeyboardLayout, MenuItem
 
 
@@ -51,14 +52,10 @@ class GroupPage(AbsMenuPage):
         group_id = self.group.id
 
         return KeyboardLayout(
-                (
-                    MenuItem('📆 расписание', TransferAction('timetable', {'group': group_id})),
-                    MenuItem('🚹 участники', TransferAction('users_list', {'group': group_id}))
-                ),
+                MenuItem('📆 расписание', TransferAction('timetable', {'group': group_id})),
                 MenuItem('💥 ответы на сегодня-завтра 💥', ViewRecentHomeworkAction(group_id)),
-                MenuItem('🎫 Приглашения', TransferAction('group_invites', {'group': group_id}), True),
+                MenuItem('🚹 участники', TransferAction('users_list', {'group': group_id})),
                 MenuItem('⚙️ Настройки', TransferAction('group_settings', {'group': group_id}), True),
-                MenuItem('❌ удалить', DeleteGroupAction(group_id), True),
                 MenuItem('◀ назад', TransferAction('grouplist')),
                 is_admin=is_admin
         )
@@ -81,9 +78,7 @@ class TimetablePage(AbsMenuPage):
                     MenuItem('◀', TransferAction('timetable', {'group': group_id, 'week': str(self.week.prev())})),
                     MenuItem('▶', TransferAction('timetable', {'group': group_id, 'week': str(self.week.next())}))
                 ),
-                (MenuItem(Week.standart_day_format(d),
-                          TransferAction('daypage', {'group': group_id, 'date': str(d)}))
-                 for d in self.week),
+                *utils.get_week_layout(group_id, self.week),
                 MenuItem.empty(),
                 MenuItem('💾 добавить на эту неделю', CreateTimetableAction(group_id, self.week), True),
                 MenuItem('🔄 копировать с прошлой недели', CopyPrevTimetableAction(group_id, self.week), True),
@@ -141,12 +136,16 @@ class GroupSettingsPage(AbsMenuPage):
         self.settings = await models.GroupSettings.get(self.query_data['group'])
 
     def get_items(self) -> KeyboardLayout:
+        group_id = self.settings.group_id
         return KeyboardLayout(
-                MenuItem('Передать админку', ChangeGroupAdminAction(self.settings.group_id)),
-                MenuItem(f'Уведомления о новых ответах {["❌", "✅"][self.settings.new_answer_notify]}',
-                         FlipNotifyAction(self.settings.group_id)),
-                MenuItem('Изменить шаблон уведомления', ChangeNotifyTemplateAction(self.settings.group_id)),
-                MenuItem('◀ назад', TransferAction('group', {'group': self.settings.group_id}))
+                MenuItem(f'Уведомлять о новых ответах {["❌", "✅"][self.settings.new_answer_notify]}',
+                         FlipNotifyAction(group_id)),
+                MenuItem('Изменить шаблон уведомления', ChangeNotifyTemplateAction(group_id)),
+                MenuItem('📌 Передать админку', ChangeGroupAdminAction(group_id)),
+                MenuItem('✒ Переименовать группу', RenameGroupAction(group_id)),
+                MenuItem('🎫 Приглашения', TransferAction('group_invites', {'group': group_id})),
+                MenuItem('❌ удалить группу', DeleteGroupAction(group_id)),
+                MenuItem('◀ назад', TransferAction('group', {'group': group_id}))
         )
 
     def get_page_text(self) -> str:

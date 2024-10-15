@@ -75,6 +75,8 @@ class JoinGroupAction(AskAction):
                 'Паленый код бро')
 
     async def check(self, message: types.Message) -> bool:
+        if not message.text:
+            return False
         l = message.text.lower()
         invite = await models.GroupInviteModel.get(l)
         return bool(invite) and invite.remain_uses > 0
@@ -160,6 +162,8 @@ class CreateTimetableAction(AskAction):
         return {'g': self.group_id, 'w': self.week}
 
     async def check(self, message: types.Message) -> bool:
+        if not message.text:
+            return False
         part = message.text.split('\n')
         return len(part) == 7 and all(p.strip() for p in part)
 
@@ -321,7 +325,7 @@ class DeleteGroupAction(AskAction):
         return message.text
 
     async def check(self, message: types.Message) -> bool:
-        return message.text.lower() == 'да'
+        return bool(message.text) and message.text.lower() == 'да'
 
     async def wrong_data_handler(self, message: types.Message):
         await self.post_actions(message)
@@ -404,3 +408,29 @@ class RequestAnswerAction(ChooseAction):
                    .send_message(settings.general_group_chat_id, messages.request_answer_template
                                  .format(lesson_name=lesson.name,
                                          date=Week.standart_day_format(lesson.date))))
+
+
+class RenameGroupAction(AskAction):
+    @staticmethod
+    def get_asker_text():
+        return ('Введи новое название группы', 'чет не то')
+
+    def query_init(self):
+        self.group_id = self.query_data['g']
+
+    def args_init(self, group_id):
+        self.group_id = group_id
+
+    def get_url_params(self) -> dict:
+        return {'g': self.group_id}
+
+    async def check(self, message: types.Message) -> bool:
+        return bool(message.text)
+
+    def extract_data(self, message: types.Message):
+        return message.text
+
+    async def process_data(self, user_id, data):
+        async with AppManager.get_db().cnt_mng as s:
+            g = await models.GroupModel.get(self.group_id, session=s)
+            g.name = data

@@ -96,6 +96,8 @@ class ChooseAction(AskAction):
         return int(message.text.removeprefix('/'))
 
     async def check(self, message: types.Message) -> bool:
+        if not message.text:
+            return False
         text = message.text.removeprefix('/')
         if not text.isdecimal():
             return False

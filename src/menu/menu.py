@@ -24,7 +24,10 @@ class MenuItem:
 
 
 class KeyboardLayout:
-    def __init__(self, *rows: Iterable[MenuItem] | MenuItem, is_admin=False, row_width=2):
+    def __init__(self, *rows: Iterable[MenuItem] | MenuItem, is_admin=False, row_width=None):
+        if row_width is None:
+            row_width = len(max(([x for x in rows if isinstance(x, tuple)] or [[1, 2]]), key=len))
+
         self.ik = types.InlineKeyboardMarkup(row_width=row_width)
         for r in rows:
             if not isinstance(r, Iterable):

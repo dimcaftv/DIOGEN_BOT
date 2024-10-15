@@ -76,3 +76,4 @@ class ActionsUrls(Enum):
     change_group_admin = ask_actions.ChangeGroupAdminAction
     change_notify_template = ask_actions.ChangeNotifyTemplateAction
     request_answer = ask_actions.RequestAnswerAction
+    rename_group = ask_actions.RenameGroupAction

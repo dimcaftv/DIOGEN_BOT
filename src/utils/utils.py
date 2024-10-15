@@ -9,6 +9,9 @@ from telebot.types import InputMediaPhoto
 import settings
 from app.app_manager import AppManager
 from database import models
+from menu.actions.actions import TransferAction
+from menu.menu import MenuItem
+from utils.calendar import Week
 
 
 async def get_tg_user(user_id: int):
@@ -69,3 +72,20 @@ async def send_solutions_with_albums(user_id: int, solutions: list['models.Solut
             await bot.send_media_group(user_id, [InputMediaPhoto(s.file_id) for s in g])
         if normis_sols:
             await bot.copy_messages(user_id, settings.MEDIA_STORAGE_TG_ID, sorted([s.msg_id for s in normis_sols]))
+
+
+def get_week_layout(group_id, week, per_row=None, reverse=True):
+    per_row = per_row or (1, 2, 2, 2)
+    assert sum(per_row) == 7
+
+    days = [MenuItem(Week.standart_day_format(d),
+                     TransferAction('daypage', {'group': group_id, 'date': str(d)}))
+            for d in week]
+    res = []
+    j = 0
+    for i in per_row:
+        res.append(tuple(days[j:j + i]))
+        j += i
+    if reverse:
+        res = res[::-1]
+    return tuple(res)
